@@ -30,6 +30,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.ReenforcementDelaySec != 180 {
 		t.Fatalf("ReenforcementDelaySec = %d, want 180", cfg.ReenforcementDelaySec)
 	}
+	if cfg.HelperLaunchCooldownSec != 5 {
+		t.Fatalf("HelperLaunchCooldownSec = %d, want 5", cfg.HelperLaunchCooldownSec)
+	}
 	if !cfg.WarningHalfwayEnabled {
 		t.Fatalf("WarningHalfwayEnabled = false, want true")
 	}
@@ -38,5 +41,25 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.BearerToken != "secret-token" {
 		t.Fatalf("BearerToken = %q, want secret-token", cfg.BearerToken)
+	}
+}
+
+func TestLoadConfigHonorsHelperLaunchCooldownOverride(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{"api_port":8088,"bearer_token":"secret-token","helper_launch_cooldown_sec":9}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.HelperLaunchCooldownSec != 9 {
+		t.Fatalf("HelperLaunchCooldownSec = %d, want 9", cfg.HelperLaunchCooldownSec)
 	}
 }

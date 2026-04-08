@@ -132,6 +132,7 @@ func (r *Runtime) ConfigView() map[string]any {
 		"api_bind_address":            r.Config.APIBindAddress,
 		"api_port":                    r.Config.APIPort,
 		"default_daily_allowance_sec": r.Config.DefaultDailyAllowanceSec,
+		"helper_launch_cooldown_sec":  r.Config.HelperLaunchCooldownSec,
 		"reenforcement_delay_sec":     r.Config.ReenforcementDelaySec,
 		"log_level":                   r.Config.LogLevel,
 	}

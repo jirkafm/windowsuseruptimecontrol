@@ -15,6 +15,36 @@ func TestShouldLaunchWhenHeartbeatMissing(t *testing.T) {
 	}
 }
 
+func TestShouldNotLaunchAgainWhenHelperWasJustStartedForSameSession(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
+	cooldown := 5 * time.Second
+	lastLaunch := launchAttempt{
+		SessionID: 5,
+		StartedAt: now.Add(-2 * time.Second),
+	}
+
+	if shouldLaunchWithCooldown(now, helperstatus.Heartbeat{}, 5, lastLaunch, cooldown) {
+		t.Fatal("expected no relaunch while initial helper startup window is still active")
+	}
+}
+
+func TestShouldLaunchAgainWhenStartupGraceExpiresWithoutHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
+	cooldown := 5 * time.Second
+	lastLaunch := launchAttempt{
+		SessionID: 5,
+		StartedAt: now.Add(-cooldown - time.Second),
+	}
+
+	if !shouldLaunchWithCooldown(now, helperstatus.Heartbeat{}, 5, lastLaunch, cooldown) {
+		t.Fatal("expected relaunch after startup grace expires without heartbeat")
+	}
+}
+
 func TestShouldNotLaunchWhenHeartbeatFreshForSession(t *testing.T) {
 	t.Parallel()
 

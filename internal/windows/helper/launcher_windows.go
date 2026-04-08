@@ -15,7 +15,7 @@ import (
 	"wincontrol/internal/helperstatus"
 )
 
-func (l Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID string) error {
+func (l *Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -28,7 +28,8 @@ func (l Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID s
 
 	store := helperstatus.New(l.HeartbeatRoot)
 	hb, err := store.Load(userSID)
-	if err == nil && !shouldLaunch(time.Now(), hb, sessionID) {
+	now := time.Now()
+	if !shouldLaunchWithCooldown(now, hb, sessionID, l.lastLaunch(userSID), l.launchCooldown()) {
 		return nil
 	}
 
@@ -79,6 +80,11 @@ func (l Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID s
 	}
 	defer windows.CloseHandle(pi.Process)
 	defer windows.CloseHandle(pi.Thread)
+
+	l.recordLaunch(userSID, launchAttempt{
+		SessionID: sessionID,
+		StartedAt: now,
+	})
 
 	return nil
 }

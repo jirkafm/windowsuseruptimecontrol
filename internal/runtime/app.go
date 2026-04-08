@@ -64,8 +64,9 @@ func ServiceMain(ctx context.Context) error {
 	defer ticker.Stop()
 
 	launcher := helperlauncher.Launcher{
-		HelperPath:    cfg.HelperPath,
-		HeartbeatRoot: filepath.Join(baseDir, "state", "heartbeats"),
+		HelperPath:     cfg.HelperPath,
+		HeartbeatRoot:  filepath.Join(baseDir, "state", "heartbeats"),
+		LaunchCooldown: time.Duration(cfg.HelperLaunchCooldownSec) * time.Second,
 	}
 
 	for {

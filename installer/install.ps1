@@ -38,6 +38,7 @@ icacls $heartbeatRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Us
     bearer_token = $BearerToken
     default_daily_allowance_sec = 3600
     reenforcement_delay_sec = 180
+    helper_launch_cooldown_sec = 5
     warning_halfway_enabled = $true
     warning_five_min_enabled = $true
     helper_path = (Join-Path $binRoot "activityhelper.exe")

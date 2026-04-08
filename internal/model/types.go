@@ -8,6 +8,7 @@ type Config struct {
 	BearerToken              string `json:"bearer_token"`
 	DefaultDailyAllowanceSec int64  `json:"default_daily_allowance_sec"`
 	ReenforcementDelaySec    int64  `json:"reenforcement_delay_sec"`
+	HelperLaunchCooldownSec  int64  `json:"helper_launch_cooldown_sec"`
 	WarningHalfwayEnabled    bool   `json:"warning_halfway_enabled"`
 	WarningFiveMinEnabled    bool   `json:"warning_five_min_enabled"`
 	HelperPath               string `json:"helper_path"`

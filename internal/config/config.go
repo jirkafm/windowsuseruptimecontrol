@@ -40,6 +40,9 @@ func applyDefaults(cfg *model.Config) {
 	if cfg.ReenforcementDelaySec == 0 {
 		cfg.ReenforcementDelaySec = 180
 	}
+	if cfg.HelperLaunchCooldownSec == 0 {
+		cfg.HelperLaunchCooldownSec = 5
+	}
 	if !cfg.WarningHalfwayEnabled {
 		cfg.WarningHalfwayEnabled = true
 	}
