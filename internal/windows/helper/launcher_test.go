@@ -44,3 +44,15 @@ func TestShouldLaunchWhenHeartbeatStale(t *testing.T) {
 		t.Fatal("expected launch for stale heartbeat")
 	}
 }
+
+func TestDefaultLaunchSettingsHideHelperWindow(t *testing.T) {
+	t.Parallel()
+
+	settings := defaultLaunchSettings()
+	if !settings.HideWindow {
+		t.Fatal("expected helper window to be hidden")
+	}
+	if !settings.NoConsoleWindow {
+		t.Fatal("expected helper launch to suppress the console window")
+	}
+}

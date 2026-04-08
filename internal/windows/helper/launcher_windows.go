@@ -55,9 +55,13 @@ func (l Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID s
 		return err
 	}
 
-	si := newStartupInfo()
+	settings := defaultLaunchSettings()
+	si := newStartupInfo(settings)
 	pi := new(windows.ProcessInformation)
 	flags := uint32(windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP)
+	if settings.NoConsoleWindow {
+		flags |= windows.CREATE_NO_WINDOW
+	}
 	if err := windows.CreateProcessAsUser(
 		primary,
 		nil,
@@ -102,9 +106,13 @@ func duplicatePrimaryToken(token windows.Token) (windows.Token, error) {
 	return primary, nil
 }
 
-func newStartupInfo() *windows.StartupInfo {
+func newStartupInfo(settings launchSettings) *windows.StartupInfo {
 	si := &windows.StartupInfo{}
 	si.Cb = uint32(unsafe.Sizeof(*si))
 	si.Desktop = syscall.StringToUTF16Ptr("winsta0\\default")
+	if settings.HideWindow {
+		si.Flags |= windows.STARTF_USESHOWWINDOW
+		si.ShowWindow = windows.SW_HIDE
+	}
 	return si
 }

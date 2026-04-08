@@ -14,15 +14,23 @@ $binRoot = Join-Path $InstallRoot "bin"
 $cfgRoot = Join-Path $InstallRoot "config"
 $logRoot = Join-Path $InstallRoot "logs"
 $stateRoot = Join-Path $InstallRoot "state"
+$spoolRoot = Join-Path $stateRoot "spool"
+$heartbeatRoot = Join-Path $stateRoot "heartbeats"
 
-New-Item -ItemType Directory -Force -Path $binRoot, $cfgRoot, $logRoot, $stateRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $binRoot, $cfgRoot, $logRoot, $stateRoot, $spoolRoot, $heartbeatRoot | Out-Null
 Copy-Item "$PSScriptRoot\..\dist\activitysvc.exe" (Join-Path $binRoot "activitysvc.exe") -Force
 Copy-Item "$PSScriptRoot\..\dist\activityhelper.exe" (Join-Path $binRoot "activityhelper.exe") -Force
 
 icacls $binRoot /inheritance:r | Out-Null
 icacls $binRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)RX" | Out-Null
 icacls $cfgRoot /inheritance:r | Out-Null
-icacls $cfgRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)RX" | Out-Null
+icacls $cfgRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-Null
+icacls $stateRoot /inheritance:r | Out-Null
+icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)RX" | Out-Null
+icacls $spoolRoot /inheritance:r | Out-Null
+icacls $spoolRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)M" | Out-Null
+icacls $heartbeatRoot /inheritance:r | Out-Null
+icacls $heartbeatRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)M" | Out-Null
 
 @{
     api_bind_address = "0.0.0.0"
@@ -45,6 +53,5 @@ if (Get-Service -Name "WinControlActivityService" -ErrorAction SilentlyContinue)
 
 New-Service -Name "WinControlActivityService" -BinaryPathName "`"$serviceExe`"" -DisplayName "WinControl Activity Service" -StartupType Automatic
 sc.exe sdset WinControlActivityService 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)' | Out-Null
-New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "WinControlActivityHelper" -Value (Join-Path $binRoot "activityhelper.exe") -PropertyType String -Force | Out-Null
 New-NetFirewallRule -DisplayName "WinControl API" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $ApiPort | Out-Null
 Start-Service -Name "WinControlActivityService"

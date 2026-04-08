@@ -17,3 +17,12 @@ Run PowerShell as Administrator:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>"
 ```
+
+## API
+
+- `GET /v1/health` is public.
+- `GET /v1/info` requires the bearer token and returns all endpoints with example usage.
+- `GET /v1/config` requires the bearer token and returns a sanitized config view.
+- `/v1/users/{userId}/...` endpoints accept either a Windows SID or a username. Username matching supports both exact stored usernames and simple-name matching for values like `MYPC\john` via `john`.
+
+Note: `config\config.json` is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the API bearer token from disk.

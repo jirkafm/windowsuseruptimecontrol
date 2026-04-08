@@ -3,8 +3,10 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"wincontrol/internal/model"
@@ -23,6 +25,14 @@ func (fakeLogger) APIf(string, ...any) {}
 func (fakeLogger) Recent(int) ([]string, error) { return []string{"line1"}, nil }
 
 func (f *fakeAdmin) State() model.StateFile { return f.state }
+
+func (f *fakeAdmin) LookupUser(user string) (model.UserDayState, error) {
+	got, ok := f.state.Users[user]
+	if !ok {
+		return model.UserDayState{}, errors.New("not found")
+	}
+	return got, nil
+}
 
 func (f *fakeAdmin) ConfigView() map[string]any { return map[string]any{"api_port": 8080} }
 
@@ -105,5 +115,49 @@ func TestAdjustEndpointAppliesDelta(t *testing.T) {
 	}
 	if admin.lastAdjustDelta != 300 {
 		t.Fatalf("lastAdjustDelta = %d, want 300", admin.lastAdjustDelta)
+	}
+}
+
+func TestInfoEndpointRequiresBearerToken(t *testing.T) {
+	t.Parallel()
+
+	server := New("token-123", &fakeAdmin{}, fakeLogger{})
+	req := httptest.NewRequest(http.MethodGet, "/v1/info", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestInfoEndpointListsKeyEndpointsAndExamples(t *testing.T) {
+	t.Parallel()
+
+	server := New("token-123", &fakeAdmin{}, fakeLogger{})
+	req := httptest.NewRequest(http.MethodGet, "/v1/info", nil)
+	req.Header.Set("Authorization", "Bearer token-123")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`"path":"/v1/info"`,
+		`"path":"/v1/config"`,
+		`"path":"/v1/announce"`,
+		`"path":"/v1/users/{userId}/adjust"`,
+		`Authorization: Bearer token-123`,
+		`"delta_sec":300`,
+		`"message":"WinControl test announcement"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("response missing %q in %s", want, body)
+		}
 	}
 }

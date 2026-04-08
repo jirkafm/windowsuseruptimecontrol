@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"wincontrol/internal/model"
@@ -32,9 +34,17 @@ type Runtime struct {
 	Detector Detector
 	Helper   HelperBus
 	Power    PowerController
+
+	lastTick                     time.Time
+	restartReenforcementPending bool
 }
 
 func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) error {
+	if r.shouldRestartReenforcement(now) {
+		r.restartReenforcementPending = true
+	}
+	r.lastTick = now
+
 	state, err := r.Store.LoadOrCreate(now, r.Config.DefaultDailyAllowanceSec)
 	if err != nil {
 		return err
@@ -46,6 +56,10 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 	}
 	if !ok {
 		return r.Store.Save(state)
+	}
+	if r.restartReenforcementPending {
+		state = restartReenforcementDelay(state, active.UserSID)
+		r.restartReenforcementPending = false
 	}
 
 	engine := policy.Engine{
@@ -73,6 +87,25 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 	}
 
 	return r.Store.Save(result.State)
+}
+
+func (r *Runtime) shouldRestartReenforcement(now time.Time) bool {
+	if r.lastTick.IsZero() {
+		return true
+	}
+	return now.Sub(r.lastTick) > 30*time.Second
+}
+
+func restartReenforcementDelay(state model.StateFile, userSID string) model.StateFile {
+	user := state.Users[userSID]
+	if !user.Exhausted {
+		return state
+	}
+
+	user.ReenforcementPending = false
+	user.ReenforcementDeadline = time.Time{}
+	state.Users[userSID] = user
+	return state
 }
 
 func (r *Runtime) HibernateNow() error {
@@ -109,12 +142,29 @@ func (r *Runtime) State() model.StateFile {
 	return state
 }
 
+func (r *Runtime) LookupUser(user string) (model.UserDayState, error) {
+	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
+	if err != nil {
+		return model.UserDayState{}, err
+	}
+
+	key, err := resolveUserKey(state, user)
+	if err != nil {
+		return model.UserDayState{}, err
+	}
+	return state.Users[key], nil
+}
+
 func (r *Runtime) AdjustUser(user string, delta int64) (model.UserDayState, error) {
 	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
 	if err != nil {
 		return model.UserDayState{}, err
 	}
-	current := state.Users[user]
+	key, err := resolveUserKey(state, user)
+	if err != nil {
+		return model.UserDayState{}, err
+	}
+	current := state.Users[key]
 	current.ConsumedSec -= delta
 	if current.ConsumedSec < 0 {
 		current.ConsumedSec = 0
@@ -125,7 +175,7 @@ func (r *Runtime) AdjustUser(user string, delta int64) (model.UserDayState, erro
 		current.ReenforcementPending = false
 		current.ReenforcementDeadline = time.Time{}
 	}
-	state.Users[user] = current
+	state.Users[key] = current
 	return current, r.Store.Save(state)
 }
 
@@ -134,7 +184,11 @@ func (r *Runtime) SetAllowance(user string, sec int64) (model.UserDayState, erro
 	if err != nil {
 		return model.UserDayState{}, err
 	}
-	current := state.Users[user]
+	key, err := resolveUserKey(state, user)
+	if err != nil {
+		return model.UserDayState{}, err
+	}
+	current := state.Users[key]
 	current.DailyAllowanceSec = sec
 	current.RecalculateRemaining()
 	if current.RemainingSec > 0 {
@@ -142,7 +196,7 @@ func (r *Runtime) SetAllowance(user string, sec int64) (model.UserDayState, erro
 		current.ReenforcementPending = false
 		current.ReenforcementDeadline = time.Time{}
 	}
-	state.Users[user] = current
+	state.Users[key] = current
 	return current, r.Store.Save(state)
 }
 
@@ -151,7 +205,11 @@ func (r *Runtime) ResetToday(user string) (model.UserDayState, error) {
 	if err != nil {
 		return model.UserDayState{}, err
 	}
-	current := state.Users[user]
+	key, err := resolveUserKey(state, user)
+	if err != nil {
+		return model.UserDayState{}, err
+	}
+	current := state.Users[key]
 	current.ConsumedSec = 0
 	current.RecalculateRemaining()
 	current.Exhausted = false
@@ -160,7 +218,7 @@ func (r *Runtime) ResetToday(user string) (model.UserDayState, error) {
 	current.FiveMinWarningSent = false
 	current.ReenforcementPending = false
 	current.ReenforcementDeadline = time.Time{}
-	state.Users[user] = current
+	state.Users[key] = current
 	return current, r.Store.Save(state)
 }
 
@@ -173,4 +231,48 @@ func (r *Runtime) Announce(message string) error {
 		return nil
 	}
 	return r.Helper.Speak(context.Background(), active.UserSID, message)
+}
+
+func resolveUserKey(state model.StateFile, input string) (string, error) {
+	if _, ok := state.Users[input]; ok {
+		return input, nil
+	}
+
+	needle := strings.TrimSpace(input)
+	if needle == "" {
+		return "", fmt.Errorf("user is required")
+	}
+
+	exactMatches := make([]string, 0, 1)
+	simpleMatches := make([]string, 0, 1)
+	for key, user := range state.Users {
+		username := strings.TrimSpace(user.Username)
+		if strings.EqualFold(username, needle) {
+			exactMatches = append(exactMatches, key)
+			continue
+		}
+		if strings.EqualFold(simpleUsername(username), needle) {
+			simpleMatches = append(simpleMatches, key)
+		}
+	}
+
+	switch {
+	case len(exactMatches) == 1:
+		return exactMatches[0], nil
+	case len(exactMatches) > 1:
+		return "", fmt.Errorf("ambiguous user %q", input)
+	case len(simpleMatches) == 1:
+		return simpleMatches[0], nil
+	case len(simpleMatches) > 1:
+		return "", fmt.Errorf("ambiguous user %q", input)
+	default:
+		return "", fmt.Errorf("user %q not found", input)
+	}
+}
+
+func simpleUsername(username string) string {
+	if idx := strings.LastIndex(username, `\`); idx >= 0 && idx < len(username)-1 {
+		return username[idx+1:]
+	}
+	return username
 }
