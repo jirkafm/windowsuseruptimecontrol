@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 type Detector struct{}

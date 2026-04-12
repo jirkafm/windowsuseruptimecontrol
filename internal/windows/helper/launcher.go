@@ -4,14 +4,14 @@ import (
 	"sync"
 	"time"
 
-	"wincontrol/internal/helperstatus"
+	"windowsuseruptimecontrol/internal/helperstatus"
 )
 
 const heartbeatTTL = 30 * time.Second
 
 type Launcher struct {
-	HelperPath    string
-	HeartbeatRoot string
+	HelperPath     string
+	HeartbeatRoot  string
 	LaunchCooldown time.Duration
 
 	mu           sync.Mutex

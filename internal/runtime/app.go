@@ -7,21 +7,21 @@ import (
 	"net/http"
 	"os"
 	"os/user"
-	"strconv"
 	"path/filepath"
+	"strconv"
 	"time"
 
-	"wincontrol/internal/api"
-	"wincontrol/internal/config"
-	"wincontrol/internal/helper"
-	"wincontrol/internal/helperfs"
-	"wincontrol/internal/helperstatus"
-	"wincontrol/internal/logging"
-	"wincontrol/internal/service"
-	"wincontrol/internal/state"
-	helperlauncher "wincontrol/internal/windows/helper"
-	"wincontrol/internal/windows/power"
-	"wincontrol/internal/windows/session"
+	"windowsuseruptimecontrol/internal/api"
+	"windowsuseruptimecontrol/internal/config"
+	"windowsuseruptimecontrol/internal/helper"
+	"windowsuseruptimecontrol/internal/helperfs"
+	"windowsuseruptimecontrol/internal/helperstatus"
+	"windowsuseruptimecontrol/internal/logging"
+	"windowsuseruptimecontrol/internal/service"
+	"windowsuseruptimecontrol/internal/state"
+	helperlauncher "windowsuseruptimecontrol/internal/windows/helper"
+	"windowsuseruptimecontrol/internal/windows/power"
+	"windowsuseruptimecontrol/internal/windows/session"
 )
 
 func ServiceMain(ctx context.Context) error {
@@ -142,13 +142,16 @@ func HelperMain(ctx context.Context) error {
 }
 
 func installRoot() string {
+	if root := os.Getenv("WINDOWS_USER_UPTIME_CONTROL_ROOT"); root != "" {
+		return root
+	}
 	if root := os.Getenv("WINCONTROL_ROOT"); root != "" {
 		return root
 	}
 	if isWindowsLikePath() {
 		return `C:\ProgramData\Activity`
 	}
-	return ".wincontrol"
+	return ".windowsuseruptimecontrol"
 }
 
 func isWindowsLikePath() bool {

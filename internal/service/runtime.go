@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"wincontrol/internal/model"
-	"wincontrol/internal/policy"
+	"windowsuseruptimecontrol/internal/model"
+	"windowsuseruptimecontrol/internal/policy"
 )
 
 type Store interface {
@@ -35,7 +35,7 @@ type Runtime struct {
 	Helper   HelperBus
 	Power    PowerController
 
-	lastTick                     time.Time
+	lastTick                    time.Time
 	restartReenforcementPending bool
 }
 

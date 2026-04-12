@@ -1,4 +1,4 @@
-module wincontrol
+module windowsuseruptimecontrol
 
 go 1.25
 

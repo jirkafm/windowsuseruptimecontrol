@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"wincontrol/internal/helperipc"
+	"windowsuseruptimecontrol/internal/helperipc"
 )
 
 type fakeSpeaker struct {

@@ -3,7 +3,7 @@ package helper
 import (
 	"context"
 
-	"wincontrol/internal/helperipc"
+	"windowsuseruptimecontrol/internal/helperipc"
 )
 
 type Speaker interface {

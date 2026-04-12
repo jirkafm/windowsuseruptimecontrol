@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"wincontrol/internal/helperstatus"
+	"windowsuseruptimecontrol/internal/helperstatus"
 )
 
 func (l *Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID string) error {

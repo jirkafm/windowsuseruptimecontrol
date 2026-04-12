@@ -3,13 +3,13 @@ package main
 import (
 	"log"
 
-	appruntime "wincontrol/internal/runtime"
-	winservice "wincontrol/internal/windows/service"
+	appruntime "windowsuseruptimecontrol/internal/runtime"
+	winservice "windowsuseruptimecontrol/internal/windows/service"
 )
 
 func main() {
 	runner := winservice.Runner{
-		Name:    "WinControlActivityService",
+		Name:    "WindowsUserUptimeControlActivityService",
 		RunFunc: appruntime.ServiceMain,
 	}
 	if err := runner.Run(); err != nil {

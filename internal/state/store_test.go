@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 func TestLoadOrCreateResetsUsersOnNewDay(t *testing.T) {

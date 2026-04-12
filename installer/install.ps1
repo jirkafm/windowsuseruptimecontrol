@@ -46,13 +46,13 @@ icacls $heartbeatRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Us
 } | ConvertTo-Json | Set-Content (Join-Path $cfgRoot "config.json")
 
 $serviceExe = Join-Path $binRoot "activitysvc.exe"
-if (Get-Service -Name "WinControlActivityService" -ErrorAction SilentlyContinue) {
-    Stop-Service -Name "WinControlActivityService" -Force
-    sc.exe delete WinControlActivityService | Out-Null
+if (Get-Service -Name "WindowsUserUptimeControlActivityService" -ErrorAction SilentlyContinue) {
+    Stop-Service -Name "WindowsUserUptimeControlActivityService" -Force
+    sc.exe delete WindowsUserUptimeControlActivityService | Out-Null
     Start-Sleep -Seconds 2
 }
 
-New-Service -Name "WinControlActivityService" -BinaryPathName "`"$serviceExe`"" -DisplayName "WinControl Activity Service" -StartupType Automatic
-sc.exe sdset WinControlActivityService 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)' | Out-Null
-New-NetFirewallRule -DisplayName "WinControl API" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $ApiPort | Out-Null
-Start-Service -Name "WinControlActivityService"
+New-Service -Name "WindowsUserUptimeControlActivityService" -BinaryPathName "`"$serviceExe`"" -DisplayName "WindowsUserUptimeControl Activity Service" -StartupType Automatic
+sc.exe sdset WindowsUserUptimeControlActivityService 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)' | Out-Null
+New-NetFirewallRule -DisplayName "WindowsUserUptimeControl API" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $ApiPort | Out-Null
+Start-Service -Name "WindowsUserUptimeControlActivityService"

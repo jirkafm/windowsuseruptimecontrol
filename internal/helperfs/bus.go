@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"wincontrol/internal/helperipc"
+	"windowsuseruptimecontrol/internal/helperipc"
 )
 
 type Bus struct {

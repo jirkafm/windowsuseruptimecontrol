@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 func Load(path string) (model.Config, error) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"wincontrol/internal/helperipc"
+	"windowsuseruptimecontrol/internal/helperipc"
 )
 
 func TestBusRoundTrip(t *testing.T) {

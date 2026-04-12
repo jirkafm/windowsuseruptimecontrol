@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 type JSONStore struct {

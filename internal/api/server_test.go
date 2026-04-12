@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 type fakeAdmin struct {
@@ -148,13 +148,14 @@ func TestInfoEndpointListsKeyEndpointsAndExamples(t *testing.T) {
 
 	body := rec.Body.String()
 	for _, want := range []string{
+		`"service":"windowsuseruptimecontrol"`,
 		`"path":"/v1/info"`,
 		`"path":"/v1/config"`,
 		`"path":"/v1/announce"`,
 		`"path":"/v1/users/{userId}/adjust"`,
 		`Authorization: Bearer token-123`,
 		`"delta_sec":300`,
-		`"message":"WinControl test announcement"`,
+		`"message":"WindowsUserUptimeControl test announcement"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("response missing %q in %s", want, body)

@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	appruntime "wincontrol/internal/runtime"
+	appruntime "windowsuseruptimecontrol/internal/runtime"
 )
 
 func main() {

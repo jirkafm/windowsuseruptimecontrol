@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 type AdminController interface {
@@ -83,7 +83,7 @@ func (s *Server) routes() {
 		}
 		s.logRequest(r, http.StatusOK)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"service":     "wincontrol",
+			"service":     "windowsuseruptimecontrol",
 			"api_version": "v1",
 			"note":        "Use the Authorization header with your bearer token. The /v1/config response is sanitized and does not expose the raw bearer token.",
 			"endpoints":   infoEndpoints(),
@@ -351,7 +351,7 @@ func infoEndpoints() []endpointInfo {
 			Description: "Speaks a message in the active user's session.",
 			Example: map[string]any{
 				"request": "curl -X POST -H 'Authorization: Bearer token-123' -H 'Content-Type: application/json' http://localhost:8111/v1/announce",
-				"body":    map[string]string{"message": "WinControl test announcement"},
+				"body":    map[string]string{"message": "WindowsUserUptimeControl test announcement"},
 			},
 		},
 		{

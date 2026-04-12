@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 func TestEvaluateConsumesActiveUserAndEmitsWarnings(t *testing.T) {

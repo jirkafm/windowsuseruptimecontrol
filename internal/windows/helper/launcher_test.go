@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"wincontrol/internal/helperstatus"
+	"windowsuseruptimecontrol/internal/helperstatus"
 )
 
 func TestShouldLaunchWhenHeartbeatMissing(t *testing.T) {

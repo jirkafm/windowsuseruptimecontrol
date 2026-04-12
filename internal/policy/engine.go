@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 type Engine struct {

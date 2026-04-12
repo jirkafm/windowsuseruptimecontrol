@@ -2,7 +2,7 @@
 
 ## Goal
 
-Validate the `wincontrol` service, helper, API, enforcement flow, and Windows-specific security behavior on a real Windows machine.
+Validate the `windowsuseruptimecontrol` service, helper, API, enforcement flow, and Windows-specific security behavior on a real Windows machine.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ Validate the `wincontrol` service, helper, API, enforcement flow, and Windows-sp
 
 ## 1. Install
 
-- Open Administrator PowerShell in the `wincontrol` project directory.
+- Open Administrator PowerShell in the `windowsuseruptimecontrol` project directory.
 - Run:
 
 ```powershell
@@ -27,7 +27,7 @@ Validate the `wincontrol` service, helper, API, enforcement flow, and Windows-sp
 - Confirm service exists:
 
 ```powershell
-Get-Service WinControlActivityService
+Get-Service WindowsUserUptimeControlActivityService
 ```
 
 - Expected:
@@ -70,7 +70,7 @@ Add-Content C:\ProgramData\Activity\config\config.json "x"
 - Confirm service started automatically:
 
 ```powershell
-Get-Service WinControlActivityService
+Get-Service WindowsUserUptimeControlActivityService
 ```
 
 - Inspect logs:
@@ -101,7 +101,7 @@ Get-Process activityhelper -ErrorAction SilentlyContinue
 Invoke-RestMethod -Method Post -Uri "http://localhost:8111/v1/announce" `
   -Headers @{ Authorization = "Bearer replace-with-test-token" } `
   -ContentType "application/json" `
-  -Body '{"message":"WinControl test announcement"}'
+  -Body '{"message":"WindowsUserUptimeControl test announcement"}'
 ```
 
 - Expected:
@@ -259,8 +259,8 @@ Stop-Process -Name activityhelper -Force
 - As a standard non-admin user, try:
 
 ```powershell
-Stop-Service WinControlActivityService
-sc.exe stop WinControlActivityService
+Stop-Service WindowsUserUptimeControlActivityService
+sc.exe stop WindowsUserUptimeControlActivityService
 taskkill /IM activitysvc.exe /F
 ```
 
@@ -270,8 +270,8 @@ taskkill /IM activitysvc.exe /F
 - As an Administrator, try:
 
 ```powershell
-Stop-Service WinControlActivityService
-Start-Service WinControlActivityService
+Stop-Service WindowsUserUptimeControlActivityService
+Start-Service WindowsUserUptimeControlActivityService
 ```
 
 - Expected:

@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"wincontrol/internal/model"
+	"windowsuseruptimecontrol/internal/model"
 )
 
 type Detector struct{}
@@ -60,11 +60,11 @@ const (
 )
 
 var (
-	modKernel32                  = syscall.NewLazyDLL("kernel32.dll")
-	procWTSGetActiveConsoleID    = modKernel32.NewProc("WTSGetActiveConsoleSessionId")
-	modWTSAPI32                  = syscall.NewLazyDLL("wtsapi32.dll")
-	procWTSQuerySessionInfoW     = modWTSAPI32.NewProc("WTSQuerySessionInformationW")
-	procWTSFreeMemory            = modWTSAPI32.NewProc("WTSFreeMemory")
+	modKernel32               = syscall.NewLazyDLL("kernel32.dll")
+	procWTSGetActiveConsoleID = modKernel32.NewProc("WTSGetActiveConsoleSessionId")
+	modWTSAPI32               = syscall.NewLazyDLL("wtsapi32.dll")
+	procWTSQuerySessionInfoW  = modWTSAPI32.NewProc("WTSQuerySessionInformationW")
+	procWTSFreeMemory         = modWTSAPI32.NewProc("WTSFreeMemory")
 )
 
 func wtsGetActiveConsoleSessionID() uint32 {
