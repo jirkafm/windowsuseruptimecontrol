@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"windowsuseruptimecontrol/internal/model"
@@ -29,6 +31,7 @@ type PowerController interface {
 }
 
 type Runtime struct {
+	mu       sync.Mutex
 	Config   model.Config
 	Store    Store
 	Detector Detector
@@ -40,6 +43,9 @@ type Runtime struct {
 }
 
 func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.shouldRestartReenforcement(now) {
 		r.restartReenforcementPending = true
 	}
@@ -65,28 +71,36 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 	engine := policy.Engine{
 		DefaultDailyAllowanceSec: r.Config.DefaultDailyAllowanceSec,
 		ReenforcementDelaySec:    r.Config.ReenforcementDelaySec,
+		WarningHalfwayEnabled:    r.Config.WarningHalfwayEnabled,
+		WarningFiveMinEnabled:    r.Config.WarningFiveMinEnabled,
 	}
 	result := engine.Evaluate(now, active, state, elapsedSec)
 
-	for _, message := range result.Messages {
-		if err := r.Helper.Speak(ctx, active.UserSID, message); err != nil {
-			return err
-		}
+	if err := r.Store.Save(result.State); err != nil {
+		return err
 	}
-	if result.TriggerEnforcement {
-		for _, number := range result.Countdown {
-			if err := r.Helper.Speak(ctx, active.UserSID, number); err != nil {
-				return err
-			}
-		}
-		if err := r.Power.Hibernate(ctx); err != nil {
-			if shutdownErr := r.Power.Shutdown(ctx); shutdownErr != nil {
-				return shutdownErr
-			}
+
+	var notifyErr error
+	speak := func(message string) {
+		if err := r.Helper.Speak(ctx, active.UserSID, message); err != nil {
+			notifyErr = errors.Join(notifyErr, err)
 		}
 	}
 
-	return r.Store.Save(result.State)
+	for _, message := range result.Messages {
+		speak(message)
+	}
+	if result.TriggerEnforcement {
+		for _, number := range result.Countdown {
+			speak(number)
+		}
+		if err := r.Power.Hibernate(ctx); err != nil {
+			if shutdownErr := r.Power.Shutdown(ctx); shutdownErr != nil {
+				return errors.Join(notifyErr, err, shutdownErr)
+			}
+		}
+	}
+	return notifyErr
 }
 
 func (r *Runtime) shouldRestartReenforcement(now time.Time) bool {
@@ -109,6 +123,9 @@ func restartReenforcementDelay(state model.StateFile, userSID string) model.Stat
 }
 
 func (r *Runtime) HibernateNow() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	active, ok, err := r.Detector.ActiveUser(context.Background())
 	if err != nil {
 		return err
@@ -134,16 +151,24 @@ func (r *Runtime) ConfigView() map[string]any {
 		"default_daily_allowance_sec": r.Config.DefaultDailyAllowanceSec,
 		"helper_launch_cooldown_sec":  r.Config.HelperLaunchCooldownSec,
 		"reenforcement_delay_sec":     r.Config.ReenforcementDelaySec,
+		"warning_halfway_enabled":     r.Config.WarningHalfwayEnabled,
+		"warning_five_min_enabled":    r.Config.WarningFiveMinEnabled,
 		"log_level":                   r.Config.LogLevel,
 	}
 }
 
 func (r *Runtime) State() model.StateFile {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	state, _ := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
 	return state
 }
 
 func (r *Runtime) LookupUser(user string) (model.UserDayState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
 	if err != nil {
 		return model.UserDayState{}, err
@@ -157,6 +182,9 @@ func (r *Runtime) LookupUser(user string) (model.UserDayState, error) {
 }
 
 func (r *Runtime) AdjustUser(user string, delta int64) (model.UserDayState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
 	if err != nil {
 		return model.UserDayState{}, err
@@ -181,6 +209,9 @@ func (r *Runtime) AdjustUser(user string, delta int64) (model.UserDayState, erro
 }
 
 func (r *Runtime) SetAllowance(user string, sec int64) (model.UserDayState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
 	if err != nil {
 		return model.UserDayState{}, err
@@ -202,6 +233,9 @@ func (r *Runtime) SetAllowance(user string, sec int64) (model.UserDayState, erro
 }
 
 func (r *Runtime) ResetToday(user string) (model.UserDayState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
 	if err != nil {
 		return model.UserDayState{}, err

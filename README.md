@@ -8,7 +8,7 @@ WindowsUserUptimeControl is a Windows-only uptime enforcer built around a backgr
 - **Admin API plus restart reenforcement** — the HTTP API exposes health, config, quota, reset, announcement, logs, and immediate-enforcement operations behind a bearer token, while the runtime also supports same-day reenforcement after reboot with a configurable delay before enforcing again.
 
 ## Quick Start
-1. Build the binaries with `GOOS=windows GOARCH=amd64 go build -o dist/activitysvc.exe ./cmd/activitysvc` and `GOOS=windows GOARCH=amd64 go build -o dist/activityhelper.exe ./cmd/activityhelper`.
+1. Build the binaries with `GOOS=windows GOARCH=amd64 go build -o dist/activitysvc.exe ./cmd/activitysvc` and `GOOS=windows GOARCH=amd64 go build -ldflags="-H=windowsgui" -o dist/activityhelper.exe ./cmd/activityhelper`.
 2. Open an elevated PowerShell window and run `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>"`.
 3. Confirm the Windows service `WindowsUserUptimeControlActivityService` is running, then query `GET /v1/info` with the bearer token to inspect the available API endpoints.
 
@@ -62,7 +62,8 @@ The service resolves usernames or SIDs, writes the updated state to disk, and ro
 ## Build/Test From CLI
 - `go test ./...` — runs the Go unit test suite across API, policy, runtime, helper IPC, state, and Windows abstraction layers.
 - `GOOS=windows GOARCH=amd64 go build -o dist/activitysvc.exe ./cmd/activitysvc` — builds the Windows service executable.
-- `GOOS=windows GOARCH=amd64 go build -o dist/activityhelper.exe ./cmd/activityhelper` — builds the helper executable for the user session.
+- `GOOS=windows GOARCH=amd64 go build -ldflags="-H=windowsgui" -o dist/activityhelper.exe ./cmd/activityhelper` — builds the helper executable for the user session without a console window.
+- `./scripts/build-release.sh` — runs tests, builds both Windows binaries, refreshes the release package, creates the zip bundle, and verifies the archive. See [docs/release.md](docs/release.md).
 
 ## Install/Operate From CLI
 - Install the service: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>"`.

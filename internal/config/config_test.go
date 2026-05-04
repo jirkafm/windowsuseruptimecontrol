@@ -63,3 +63,31 @@ func TestLoadConfigHonorsHelperLaunchCooldownOverride(t *testing.T) {
 		t.Fatalf("HelperLaunchCooldownSec = %d, want 9", cfg.HelperLaunchCooldownSec)
 	}
 }
+
+func TestLoadConfigHonorsDisabledWarnings(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+		"api_port":8088,
+		"bearer_token":"secret-token",
+		"warning_halfway_enabled":false,
+		"warning_five_min_enabled":false
+	}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.WarningHalfwayEnabled {
+		t.Fatalf("WarningHalfwayEnabled = true, want false")
+	}
+	if cfg.WarningFiveMinEnabled {
+		t.Fatalf("WarningFiveMinEnabled = true, want false")
+	}
+}

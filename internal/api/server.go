@@ -101,8 +101,9 @@ func (s *Server) routes() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		users := make([]model.UserDayState, 0, len(s.admin.State().Users))
-		for _, user := range s.admin.State().Users {
+		state := s.admin.State()
+		users := make([]model.UserDayState, 0, len(state.Users))
+		for _, user := range state.Users {
 			users = append(users, user)
 		}
 		s.logRequest(r, http.StatusOK)

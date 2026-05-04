@@ -10,7 +10,12 @@ import (
 func TestEvaluateConsumesActiveUserAndEmitsWarnings(t *testing.T) {
 	t.Parallel()
 
-	engine := Engine{DefaultDailyAllowanceSec: 3600, ReenforcementDelaySec: 180}
+	engine := Engine{
+		DefaultDailyAllowanceSec: 3600,
+		ReenforcementDelaySec:    180,
+		WarningHalfwayEnabled:    true,
+		WarningFiveMinEnabled:    true,
+	}
 	state := model.StateFile{
 		ServiceDate: "2026-04-01",
 		Users: map[string]model.UserDayState{
@@ -51,11 +56,59 @@ func TestEvaluateConsumesActiveUserAndEmitsWarnings(t *testing.T) {
 	}
 }
 
+func TestEvaluateSkipsDisabledWarnings(t *testing.T) {
+	t.Parallel()
+
+	engine := Engine{
+		DefaultDailyAllowanceSec: 3600,
+		ReenforcementDelaySec:    180,
+		WarningHalfwayEnabled:    false,
+		WarningFiveMinEnabled:    false,
+	}
+	state := model.StateFile{
+		ServiceDate: "2026-04-01",
+		Users: map[string]model.UserDayState{
+			"sid-john": {
+				UserSID:            "sid-john",
+				Username:           "John",
+				Date:               "2026-04-01",
+				DailyAllowanceSec:  3600,
+				ConsumedSec:        3299,
+				RemainingSec:       301,
+				StartupWarningSent: true,
+			},
+		},
+	}
+
+	result := engine.Evaluate(
+		time.Date(2026, 4, 1, 10, 0, 10, 0, time.UTC),
+		model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"},
+		state,
+		1,
+	)
+
+	if len(result.Messages) != 0 {
+		t.Fatalf("Messages = %#v, want no disabled warnings", result.Messages)
+	}
+	user := result.State.Users["sid-john"]
+	if user.HalfwayWarningSent {
+		t.Fatal("HalfwayWarningSent = true, want false for disabled warning")
+	}
+	if user.FiveMinWarningSent {
+		t.Fatal("FiveMinWarningSent = true, want false for disabled warning")
+	}
+}
+
 func TestEvaluateCreatesReenforcementDeadlineForSameDayReturn(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	engine := Engine{DefaultDailyAllowanceSec: 3600, ReenforcementDelaySec: 180}
+	engine := Engine{
+		DefaultDailyAllowanceSec: 3600,
+		ReenforcementDelaySec:    180,
+		WarningHalfwayEnabled:    true,
+		WarningFiveMinEnabled:    true,
+	}
 	state := model.StateFile{
 		ServiceDate: "2026-04-01",
 		Users: map[string]model.UserDayState{
@@ -90,7 +143,12 @@ func TestEvaluateTriggersEnforcementCountdown(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 4, 1, 12, 3, 1, 0, time.UTC)
-	engine := Engine{DefaultDailyAllowanceSec: 3600, ReenforcementDelaySec: 180}
+	engine := Engine{
+		DefaultDailyAllowanceSec: 3600,
+		ReenforcementDelaySec:    180,
+		WarningHalfwayEnabled:    true,
+		WarningFiveMinEnabled:    true,
+	}
 	state := model.StateFile{
 		ServiceDate: "2026-04-01",
 		Users: map[string]model.UserDayState{

@@ -14,7 +14,10 @@ func Load(path string) (model.Config, error) {
 		return model.Config{}, fmt.Errorf("read config: %w", err)
 	}
 
-	var cfg model.Config
+	cfg := model.Config{
+		WarningHalfwayEnabled: true,
+		WarningFiveMinEnabled: true,
+	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return model.Config{}, fmt.Errorf("decode config: %w", err)
 	}
@@ -42,12 +45,6 @@ func applyDefaults(cfg *model.Config) {
 	}
 	if cfg.HelperLaunchCooldownSec == 0 {
 		cfg.HelperLaunchCooldownSec = 5
-	}
-	if !cfg.WarningHalfwayEnabled {
-		cfg.WarningHalfwayEnabled = true
-	}
-	if !cfg.WarningFiveMinEnabled {
-		cfg.WarningFiveMinEnabled = true
 	}
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "info"

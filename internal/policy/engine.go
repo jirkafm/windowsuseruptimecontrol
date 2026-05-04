@@ -10,6 +10,8 @@ import (
 type Engine struct {
 	DefaultDailyAllowanceSec int64
 	ReenforcementDelaySec    int64
+	WarningHalfwayEnabled    bool
+	WarningFiveMinEnabled    bool
 }
 
 func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) model.Evaluation {
@@ -57,11 +59,11 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 		result.Messages = append(result.Messages, fmt.Sprintf("You have %d minutes remaining.", user.RemainingSec/60))
 		user.StartupWarningSent = true
 	}
-	if !user.HalfwayWarningSent && user.ConsumedSec >= halfwayThreshold {
+	if e.WarningHalfwayEnabled && !user.HalfwayWarningSent && user.ConsumedSec >= halfwayThreshold {
 		result.Messages = append(result.Messages, "You have 30 minutes remaining.")
 		user.HalfwayWarningSent = true
 	}
-	if !user.FiveMinWarningSent && user.RemainingSec <= 300 {
+	if e.WarningFiveMinEnabled && !user.FiveMinWarningSent && user.RemainingSec <= 300 {
 		result.Messages = append(result.Messages, "You have 5 minutes remaining.")
 		user.FiveMinWarningSent = true
 	}
