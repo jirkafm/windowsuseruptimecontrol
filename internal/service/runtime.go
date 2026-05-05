@@ -226,6 +226,10 @@ func (r *Runtime) ConfigView() map[string]any {
 		"warning_halfway_enabled":     r.Config.WarningHalfwayEnabled,
 		"warning_five_min_enabled":    r.Config.WarningFiveMinEnabled,
 		"log_level":                   r.Config.LogLevel,
+		"log_max_size_mb":             r.Config.LogMaxSizeMB,
+		"log_max_backups":             r.Config.LogMaxBackups,
+		"log_max_age_days":            r.Config.LogMaxAgeDays,
+		"log_compress":                r.Config.LogCompress,
 	}
 }
 

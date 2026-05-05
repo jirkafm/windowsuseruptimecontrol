@@ -563,6 +563,10 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 		Config: model.Config{
 			WarningHalfwayEnabled: true,
 			WarningFiveMinEnabled: false,
+			LogMaxSizeMB:          10,
+			LogMaxBackups:         10,
+			LogMaxAgeDays:         365,
+			LogCompress:           true,
 		},
 	}
 
@@ -572,6 +576,18 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 	}
 	if view["warning_five_min_enabled"] != false {
 		t.Fatalf("warning_five_min_enabled = %#v, want false", view["warning_five_min_enabled"])
+	}
+	if view["log_max_size_mb"] != 10 {
+		t.Fatalf("log_max_size_mb = %#v, want 10", view["log_max_size_mb"])
+	}
+	if view["log_max_backups"] != 10 {
+		t.Fatalf("log_max_backups = %#v, want 10", view["log_max_backups"])
+	}
+	if view["log_max_age_days"] != 365 {
+		t.Fatalf("log_max_age_days = %#v, want 365", view["log_max_age_days"])
+	}
+	if view["log_compress"] != true {
+		t.Fatalf("log_compress = %#v, want true", view["log_compress"])
 	}
 }
 

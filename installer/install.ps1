@@ -37,6 +37,10 @@ icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-N
     warning_five_min_enabled = $true
     helper_path = (Join-Path $binRoot "activityhelper.exe")
     log_level = "info"
+    log_max_size_mb = 10
+    log_max_backups = 10
+    log_max_age_days = 365
+    log_compress = $true
 } | ConvertTo-Json | Set-Content (Join-Path $cfgRoot "config.json")
 
 $serviceExe = Join-Path $binRoot "activitysvc.exe"

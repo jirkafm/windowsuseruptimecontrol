@@ -39,8 +39,56 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.WarningFiveMinEnabled {
 		t.Fatalf("WarningFiveMinEnabled = false, want true")
 	}
+	if cfg.LogMaxSizeMB != 10 {
+		t.Fatalf("LogMaxSizeMB = %d, want 10", cfg.LogMaxSizeMB)
+	}
+	if cfg.LogMaxBackups != 10 {
+		t.Fatalf("LogMaxBackups = %d, want 10", cfg.LogMaxBackups)
+	}
+	if cfg.LogMaxAgeDays != 365 {
+		t.Fatalf("LogMaxAgeDays = %d, want 365", cfg.LogMaxAgeDays)
+	}
+	if !cfg.LogCompress {
+		t.Fatalf("LogCompress = false, want true")
+	}
 	if cfg.BearerToken != "secret-token" {
 		t.Fatalf("BearerToken = %q, want secret-token", cfg.BearerToken)
+	}
+}
+
+func TestLoadConfigHonorsLogRotationOverrides(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+		"api_port":8088,
+		"bearer_token":"secret-token",
+		"log_max_size_mb":25,
+		"log_max_backups":3,
+		"log_max_age_days":90,
+		"log_compress":false
+	}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.LogMaxSizeMB != 25 {
+		t.Fatalf("LogMaxSizeMB = %d, want 25", cfg.LogMaxSizeMB)
+	}
+	if cfg.LogMaxBackups != 3 {
+		t.Fatalf("LogMaxBackups = %d, want 3", cfg.LogMaxBackups)
+	}
+	if cfg.LogMaxAgeDays != 90 {
+		t.Fatalf("LogMaxAgeDays = %d, want 90", cfg.LogMaxAgeDays)
+	}
+	if cfg.LogCompress {
+		t.Fatalf("LogCompress = true, want false")
 	}
 }
 

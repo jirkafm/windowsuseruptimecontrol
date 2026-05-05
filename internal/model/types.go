@@ -13,6 +13,10 @@ type Config struct {
 	WarningFiveMinEnabled    bool   `json:"warning_five_min_enabled"`
 	HelperPath               string `json:"helper_path"`
 	LogLevel                 string `json:"log_level"`
+	LogMaxSizeMB             int    `json:"log_max_size_mb"`
+	LogMaxBackups            int    `json:"log_max_backups"`
+	LogMaxAgeDays            int    `json:"log_max_age_days"`
+	LogCompress              bool   `json:"log_compress"`
 }
 
 type UserDayState struct {

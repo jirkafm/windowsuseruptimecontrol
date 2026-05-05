@@ -17,6 +17,7 @@ func Load(path string) (model.Config, error) {
 	cfg := model.Config{
 		WarningHalfwayEnabled: true,
 		WarningFiveMinEnabled: true,
+		LogCompress:           true,
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return model.Config{}, fmt.Errorf("decode config: %w", err)
@@ -48,5 +49,14 @@ func applyDefaults(cfg *model.Config) {
 	}
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "info"
+	}
+	if cfg.LogMaxSizeMB == 0 {
+		cfg.LogMaxSizeMB = 10
+	}
+	if cfg.LogMaxBackups == 0 {
+		cfg.LogMaxBackups = 10
+	}
+	if cfg.LogMaxAgeDays == 0 {
+		cfg.LogMaxAgeDays = 365
 	}
 }

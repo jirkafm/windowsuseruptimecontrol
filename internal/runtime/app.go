@@ -35,9 +35,15 @@ func ServiceMain(ctx context.Context) error {
 		return err
 	}
 
-	logger := logging.New(
+	logger := logging.NewWithRotation(
 		filepath.Join(baseDir, "logs", "service.log"),
 		filepath.Join(baseDir, "logs", "api.log"),
+		logging.RotationConfig{
+			MaxSizeMB:  cfg.LogMaxSizeMB,
+			MaxBackups: cfg.LogMaxBackups,
+			MaxAgeDays: cfg.LogMaxAgeDays,
+			Compress:   cfg.LogCompress,
+		},
 	)
 	store := state.NewJSONStore(filepath.Join(baseDir, "state", "state.json"))
 	helpers := helperipc.NewServer()

@@ -2,32 +2,70 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+type RotationConfig struct {
+	MaxSizeMB  int
+	MaxBackups int
+	MaxAgeDays int
+	Compress   bool
+}
+
 type FileLogger struct {
-	mu          sync.Mutex
-	servicePath string
-	apiPath     string
+	mu            sync.Mutex
+	servicePath   string
+	apiPath       string
+	serviceWriter io.Writer
+	apiWriter     io.Writer
 }
 
 func New(servicePath, apiPath string) *FileLogger {
+	return NewWithRotation(servicePath, apiPath, RotationConfig{
+		MaxSizeMB:  10,
+		MaxBackups: 10,
+		MaxAgeDays: 365,
+		Compress:   true,
+	})
+}
+
+func NewWithRotation(servicePath, apiPath string, cfg RotationConfig) *FileLogger {
+	cfg = normalizeRotationConfig(cfg)
 	return &FileLogger{
 		servicePath: servicePath,
 		apiPath:     apiPath,
+		serviceWriter: &lumberjack.Logger{
+			Filename:   servicePath,
+			MaxSize:    cfg.MaxSizeMB,
+			MaxBackups: cfg.MaxBackups,
+			MaxAge:     cfg.MaxAgeDays,
+			LocalTime:  true,
+			Compress:   cfg.Compress,
+		},
+		apiWriter: &lumberjack.Logger{
+			Filename:   apiPath,
+			MaxSize:    cfg.MaxSizeMB,
+			MaxBackups: cfg.MaxBackups,
+			MaxAge:     cfg.MaxAgeDays,
+			LocalTime:  true,
+			Compress:   cfg.Compress,
+		},
 	}
 }
 
 func (l *FileLogger) Servicef(format string, args ...any) {
-	l.write(l.servicePath, format, args...)
+	l.write(l.servicePath, l.serviceWriter, format, args...)
 }
 
 func (l *FileLogger) APIf(format string, args ...any) {
-	l.write(l.apiPath, format, args...)
+	l.write(l.apiPath, l.apiWriter, format, args...)
 }
 
 func (l *FileLogger) Recent(limit int) ([]string, error) {
@@ -46,21 +84,15 @@ func (l *FileLogger) Recent(limit int) ([]string, error) {
 	return lines[len(lines)-limit:], nil
 }
 
-func (l *FileLogger) write(path, format string, args ...any) {
+func (l *FileLogger) write(path string, writer io.Writer, format string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
 	line := fmt.Sprintf("%s %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
-	_, _ = f.WriteString(line)
+	_, _ = writer.Write([]byte(line))
 }
 
 func readLines(path string) ([]string, error) {
@@ -73,4 +105,17 @@ func readLines(path string) ([]string, error) {
 		return nil, nil
 	}
 	return strings.Split(text, "\n"), nil
+}
+
+func normalizeRotationConfig(cfg RotationConfig) RotationConfig {
+	if cfg.MaxSizeMB == 0 {
+		cfg.MaxSizeMB = 10
+	}
+	if cfg.MaxBackups == 0 {
+		cfg.MaxBackups = 10
+	}
+	if cfg.MaxAgeDays == 0 {
+		cfg.MaxAgeDays = 365
+	}
+	return cfg
 }
