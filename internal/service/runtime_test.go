@@ -472,6 +472,89 @@ func TestAdjustUserResolvesSimpleUsernameFromQualifiedUsername(t *testing.T) {
 	}
 }
 
+func TestSetAllowanceAnnouncesRemainingTimeForActiveUser(t *testing.T) {
+	t.Parallel()
+
+	helper := &fakeHelperBus{}
+	store := &fakeStore{
+		state: model.StateFile{
+			ServiceDate: "2026-04-02",
+			Users: map[string]model.UserDayState{
+				"S-1-5-21-john": {
+					UserSID:           "S-1-5-21-john",
+					Username:          "MYPC\\john",
+					Date:              "2026-04-02",
+					DailyAllowanceSec: 3600,
+					ConsumedSec:       900,
+					RemainingSec:      2700,
+				},
+			},
+		},
+	}
+	rt := Runtime{
+		Config:   model.Config{DefaultDailyAllowanceSec: 3600},
+		Store:    store,
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "MYPC\\john", UserSID: "S-1-5-21-john"}, ok: true},
+		Helper:   helper,
+	}
+
+	user, err := rt.SetAllowance("john", 3900)
+	if err != nil {
+		t.Fatalf("SetAllowance error: %v", err)
+	}
+	if user.RemainingSec != 3000 {
+		t.Fatalf("RemainingSec = %d, want 3000", user.RemainingSec)
+	}
+	if len(helper.messages) != 1 {
+		t.Fatalf("messages = %#v, want one allowance announcement", helper.messages)
+	}
+	if helper.messages[0] != "S-1-5-21-john:Your remaining time has changed. You have 50 minutes remaining." {
+		t.Fatalf("message = %q, want remaining-time announcement", helper.messages[0])
+	}
+}
+
+func TestSetAllowanceDoesNotAnnounceForInactiveUser(t *testing.T) {
+	t.Parallel()
+
+	helper := &fakeHelperBus{}
+	store := &fakeStore{
+		state: model.StateFile{
+			ServiceDate: "2026-04-02",
+			Users: map[string]model.UserDayState{
+				"S-1-5-21-john": {
+					UserSID:           "S-1-5-21-john",
+					Username:          "MYPC\\john",
+					Date:              "2026-04-02",
+					DailyAllowanceSec: 3600,
+					ConsumedSec:       900,
+					RemainingSec:      2700,
+				},
+				"S-1-5-21-jane": {
+					UserSID:           "S-1-5-21-jane",
+					Username:          "MYPC\\jane",
+					Date:              "2026-04-02",
+					DailyAllowanceSec: 3600,
+					ConsumedSec:       600,
+					RemainingSec:      3000,
+				},
+			},
+		},
+	}
+	rt := Runtime{
+		Config:   model.Config{DefaultDailyAllowanceSec: 3600},
+		Store:    store,
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "MYPC\\jane", UserSID: "S-1-5-21-jane"}, ok: true},
+		Helper:   helper,
+	}
+
+	if _, err := rt.SetAllowance("john", 3900); err != nil {
+		t.Fatalf("SetAllowance error: %v", err)
+	}
+	if len(helper.messages) != 0 {
+		t.Fatalf("messages = %#v, want no announcement for inactive user", helper.messages)
+	}
+}
+
 func TestLookupUserResolvesExactUsername(t *testing.T) {
 	t.Parallel()
 

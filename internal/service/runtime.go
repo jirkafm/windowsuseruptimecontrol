@@ -229,7 +229,11 @@ func (r *Runtime) SetAllowance(user string, sec int64) (model.UserDayState, erro
 		current.ReenforcementDeadline = time.Time{}
 	}
 	state.Users[key] = current
-	return current, r.Store.Save(state)
+	if err := r.Store.Save(state); err != nil {
+		return model.UserDayState{}, err
+	}
+	r.announceAllowanceChanged(context.Background(), key, current)
+	return current, nil
 }
 
 func (r *Runtime) ResetToday(user string) (model.UserDayState, error) {
@@ -266,6 +270,23 @@ func (r *Runtime) Announce(message string) error {
 		return nil
 	}
 	return r.Helper.Speak(context.Background(), active.UserSID, message)
+}
+
+func (r *Runtime) announceAllowanceChanged(ctx context.Context, userKey string, user model.UserDayState) {
+	if r.Detector == nil || r.Helper == nil {
+		return
+	}
+	active, ok, err := r.Detector.ActiveUser(ctx)
+	if err != nil || !ok {
+		return
+	}
+	if !strings.EqualFold(active.UserSID, user.UserSID) && !strings.EqualFold(active.UserSID, userKey) {
+		return
+	}
+	_ = r.Helper.Speak(ctx, active.UserSID, fmt.Sprintf(
+		"Your remaining time has changed. You have %d minutes remaining.",
+		user.RemainingSec/60,
+	))
 }
 
 func resolveUserKey(state model.StateFile, input string) (string, error) {
