@@ -217,6 +217,37 @@ func TestHelperStreamDeliversCommandsToAuthenticatedHelper(t *testing.T) {
 	}
 }
 
+func TestHelperStreamAnnouncesEstablishedConnection(t *testing.T) {
+	t.Parallel()
+
+	helpers := helperipc.NewServer()
+	server := NewWithHelper("token-123", &fakeAdmin{}, fakeLogger{}, "helper-token", helpers)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/helper/stream?user_sid=sid-john&session_id=5", nil).WithContext(ctx)
+	req.Header.Set("Authorization", "Bearer helper-token")
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		server.ServeHTTP(rec, req)
+		close(done)
+	}()
+
+	waitFor(t, func() bool {
+		return strings.Contains(rec.Body.String(), `"message":"Connection with uptime control service established."`)
+	}, "connection announcement")
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for helper stream to close")
+	}
+}
+
 func waitFor(t *testing.T, ok func() bool, label string) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)

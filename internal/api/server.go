@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -28,6 +29,7 @@ type Logger interface {
 
 type HelperRegistry interface {
 	Register(userSID string, sessionID uint32) (<-chan helperipc.Command, func())
+	Send(rctx context.Context, userSID string, cmd helperipc.Command) error
 }
 
 type Server struct {
@@ -295,6 +297,10 @@ func (s *Server) handleHelperStream(w http.ResponseWriter, r *http.Request) {
 
 	commands, unregister := s.helpers.Register(userSID, uint32(sessionID))
 	defer unregister()
+	_ = s.helpers.Send(r.Context(), userSID, helperipc.Command{
+		Type:    helperipc.CommandSpeak,
+		Message: "Connection with uptime control service established.",
+	})
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.WriteHeader(http.StatusOK)
