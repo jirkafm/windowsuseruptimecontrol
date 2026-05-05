@@ -35,6 +35,7 @@ icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-N
     helper_launch_cooldown_sec = 5
     warning_halfway_enabled = $true
     warning_five_min_enabled = $true
+    custom_consumed_warning_percentages = @()
     helper_path = (Join-Path $binRoot "activityhelper.exe")
     log_level = "info"
 } | ConvertTo-Json | Set-Content (Join-Path $cfgRoot "config.json")

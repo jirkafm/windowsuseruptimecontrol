@@ -4,7 +4,7 @@ WindowsUserUptimeControl is a Windows-only uptime enforcer built around a backgr
 
 ## Highlights
 - **Per-user daily uptime enforcement** — the state store keeps a separate daily allowance, consumed time, remaining time, and warning/enforcement flags for each tracked Windows SID so one user exhausting their time does not overwrite another user’s quota.
-- **Active console detection with spoken warnings** — the service only counts usage for the active console session, launches one `activityhelper.exe` per active user, and delivers startup, halfway, five-minute, and countdown announcements over a private live HTTP stream.
+- **Active console detection with spoken warnings** — the service only counts usage for the active console session, launches one `activityhelper.exe` per active user, and delivers startup, halfway, optional custom consumed-time, five-minute, and countdown announcements over a private live HTTP stream.
 - **Admin API plus restart reenforcement** — the HTTP API exposes health, config, quota, reset, announcement, logs, and immediate-enforcement operations behind a bearer token, while the runtime also supports same-day reenforcement after reboot with a configurable delay before enforcing again.
 
 ## Quick Start
@@ -72,7 +72,7 @@ The service resolves usernames or SIDs, writes the updated state to disk, and ro
 - Trigger immediate enforcement: `curl -X POST -H "Authorization: Bearer <token>" http://localhost:8111/v1/enforcement/hibernate-now`.
 
 ## Configuration Notes
-The installer writes `C:\ProgramData\Activity\config\config.json` with defaults for `api_bind_address`, `api_port`, `default_daily_allowance_sec`, `reenforcement_delay_sec`, `helper_launch_cooldown_sec`, warning toggles, helper path, and log level. The config directory is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the raw bearer token.
+The installer writes `C:\ProgramData\Activity\config\config.json` with defaults for `api_bind_address`, `api_port`, `default_daily_allowance_sec`, `reenforcement_delay_sec`, `helper_launch_cooldown_sec`, warning toggles, `custom_consumed_warning_percentages`, helper path, and log level. `custom_consumed_warning_percentages` accepts up to 10 integers from `1` through `99`; duplicates are treated as one value, and `50` is ignored with a service warning because the halfway announcement is built in. The config directory is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the raw bearer token.
 
 Manual validation steps for installation, ACLs, helper relaunch, API auth, user quota behavior, and enforcement flow are documented in [docs/windows-validation-checklist.md](docs/windows-validation-checklist.md).
 

@@ -24,7 +24,8 @@ func TestLoadOrCreateResetsUsersOnNewDay(t *testing.T) {
 				"daily_allowance_sec":3600,
 				"consumed_sec":3550,
 				"remaining_sec":50,
-				"exhausted":true
+				"exhausted":true,
+				"custom_consumed_warnings_sent":[25,66]
 			}
 		}
 	}`)
@@ -50,6 +51,9 @@ func TestLoadOrCreateResetsUsersOnNewDay(t *testing.T) {
 	}
 	if user.Exhausted {
 		t.Fatalf("Exhausted = true, want false")
+	}
+	if len(user.CustomConsumedWarningsSent) != 0 {
+		t.Fatalf("CustomConsumedWarningsSent = %#v, want empty", user.CustomConsumedWarningsSent)
 	}
 }
 

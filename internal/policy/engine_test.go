@@ -99,6 +99,104 @@ func TestEvaluateSkipsDisabledWarnings(t *testing.T) {
 	}
 }
 
+func TestEvaluateEmitsCustomConsumedWarningOnce(t *testing.T) {
+	t.Parallel()
+
+	engine := Engine{
+		DefaultDailyAllowanceSec:         3600,
+		ReenforcementDelaySec:            180,
+		CustomConsumedWarningPercentages: []int{25},
+	}
+	state := model.StateFile{
+		ServiceDate: "2026-04-01",
+		Users: map[string]model.UserDayState{
+			"sid-john": {
+				UserSID:            "sid-john",
+				Username:           "John",
+				Date:               "2026-04-01",
+				DailyAllowanceSec:  3600,
+				ConsumedSec:        899,
+				RemainingSec:       2701,
+				StartupWarningSent: true,
+			},
+		},
+	}
+
+	result := engine.Evaluate(
+		time.Date(2026, 4, 1, 10, 15, 0, 0, time.UTC),
+		model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"},
+		state,
+		1,
+	)
+
+	user := result.State.Users["sid-john"]
+	if len(result.Messages) != 1 || result.Messages[0] != "You have 45 minutes remaining." {
+		t.Fatalf("Messages = %#v, want custom remaining-time announcement", result.Messages)
+	}
+	if len(user.CustomConsumedWarningsSent) != 1 || user.CustomConsumedWarningsSent[0] != 25 {
+		t.Fatalf("CustomConsumedWarningsSent = %#v, want [25]", user.CustomConsumedWarningsSent)
+	}
+
+	repeated := engine.Evaluate(
+		time.Date(2026, 4, 1, 10, 15, 1, 0, time.UTC),
+		model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"},
+		result.State,
+		1,
+	)
+	if len(repeated.Messages) != 0 {
+		t.Fatalf("Messages = %#v, want no duplicate custom warning", repeated.Messages)
+	}
+}
+
+func TestEvaluateTracksCustomConsumedWarningsPerUser(t *testing.T) {
+	t.Parallel()
+
+	engine := Engine{
+		DefaultDailyAllowanceSec:         3600,
+		ReenforcementDelaySec:            180,
+		CustomConsumedWarningPercentages: []int{25},
+	}
+	state := model.StateFile{
+		ServiceDate: "2026-04-01",
+		Users: map[string]model.UserDayState{
+			"sid-john": {
+				UserSID:                    "sid-john",
+				Username:                   "John",
+				Date:                       "2026-04-01",
+				DailyAllowanceSec:          3600,
+				ConsumedSec:                1200,
+				RemainingSec:               2400,
+				StartupWarningSent:         true,
+				CustomConsumedWarningsSent: []int{25},
+			},
+			"sid-mary": {
+				UserSID:            "sid-mary",
+				Username:           "Mary",
+				Date:               "2026-04-01",
+				DailyAllowanceSec:  3600,
+				ConsumedSec:        899,
+				RemainingSec:       2701,
+				StartupWarningSent: true,
+			},
+		},
+	}
+
+	result := engine.Evaluate(
+		time.Date(2026, 4, 1, 11, 0, 0, 0, time.UTC),
+		model.ActiveUser{SessionID: 2, Username: "Mary", UserSID: "sid-mary"},
+		state,
+		1,
+	)
+
+	mary := result.State.Users["sid-mary"]
+	if len(result.Messages) != 1 || result.Messages[0] != "You have 45 minutes remaining." {
+		t.Fatalf("Messages = %#v, want Mary custom remaining-time announcement", result.Messages)
+	}
+	if len(mary.CustomConsumedWarningsSent) != 1 || mary.CustomConsumedWarningsSent[0] != 25 {
+		t.Fatalf("Mary CustomConsumedWarningsSent = %#v, want [25]", mary.CustomConsumedWarningsSent)
+	}
+}
+
 func TestEvaluateCreatesReenforcementDeadlineForSameDayReturn(t *testing.T) {
 	t.Parallel()
 

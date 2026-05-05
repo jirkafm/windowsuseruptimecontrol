@@ -130,6 +130,47 @@ func TestTickConsumesTimeAndSpeaksPolicyMessages(t *testing.T) {
 	}
 }
 
+func TestTickSpeaksCustomConsumedWarningFromConfig(t *testing.T) {
+	t.Parallel()
+
+	helper := &fakeHelperBus{}
+	rt := Runtime{
+		Config: model.Config{
+			DefaultDailyAllowanceSec:         3600,
+			ReenforcementDelaySec:            180,
+			CustomConsumedWarningPercentages: []int{25},
+		},
+		Store: &fakeStore{
+			state: model.StateFile{
+				ServiceDate: "2026-04-01",
+				Users: map[string]model.UserDayState{
+					"sid-john": {
+						UserSID:            "sid-john",
+						Username:           "John",
+						Date:               "2026-04-01",
+						DailyAllowanceSec:  3600,
+						ConsumedSec:        899,
+						RemainingSec:       2701,
+						StartupWarningSent: true,
+					},
+				},
+			},
+		},
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   helper,
+		Power:    &fakePower{},
+	}
+
+	err := rt.Tick(context.Background(), time.Date(2026, 4, 1, 10, 15, 0, 0, time.UTC), 1)
+	if err != nil {
+		t.Fatalf("Tick error: %v", err)
+	}
+
+	if len(helper.messages) != 1 || helper.messages[0] != "sid-john:You have 45 minutes remaining." {
+		t.Fatalf("messages = %#v, want custom consumed warning", helper.messages)
+	}
+}
+
 func TestTickLogsUptimeControlStartOnceForActiveUser(t *testing.T) {
 	t.Parallel()
 
@@ -561,8 +602,9 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 
 	rt := Runtime{
 		Config: model.Config{
-			WarningHalfwayEnabled: true,
-			WarningFiveMinEnabled: false,
+			WarningHalfwayEnabled:            true,
+			WarningFiveMinEnabled:            false,
+			CustomConsumedWarningPercentages: []int{25, 66},
 		},
 	}
 
@@ -572,6 +614,53 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 	}
 	if view["warning_five_min_enabled"] != false {
 		t.Fatalf("warning_five_min_enabled = %#v, want false", view["warning_five_min_enabled"])
+	}
+	custom, ok := view["custom_consumed_warning_percentages"].([]int)
+	if !ok {
+		t.Fatalf("custom_consumed_warning_percentages = %T, want []int", view["custom_consumed_warning_percentages"])
+	}
+	if len(custom) != 2 || custom[0] != 25 || custom[1] != 66 {
+		t.Fatalf("custom_consumed_warning_percentages = %#v, want [25 66]", custom)
+	}
+}
+
+func TestResetTodayClearsCustomConsumedWarnings(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		state: model.StateFile{
+			ServiceDate: "2026-04-02",
+			Users: map[string]model.UserDayState{
+				"sid-john": {
+					UserSID:                    "sid-john",
+					Username:                   "John",
+					Date:                       "2026-04-02",
+					DailyAllowanceSec:          3600,
+					ConsumedSec:                1800,
+					RemainingSec:               1800,
+					StartupWarningSent:         true,
+					HalfwayWarningSent:         true,
+					FiveMinWarningSent:         true,
+					CustomConsumedWarningsSent: []int{25, 66},
+				},
+			},
+		},
+	}
+	rt := Runtime{
+		Config: model.Config{DefaultDailyAllowanceSec: 3600},
+		Store:  store,
+	}
+
+	user, err := rt.ResetToday("sid-john")
+	if err != nil {
+		t.Fatalf("ResetToday error: %v", err)
+	}
+
+	if len(user.CustomConsumedWarningsSent) != 0 {
+		t.Fatalf("CustomConsumedWarningsSent = %#v, want empty", user.CustomConsumedWarningsSent)
+	}
+	if len(store.state.Users["sid-john"].CustomConsumedWarningsSent) != 0 {
+		t.Fatalf("stored CustomConsumedWarningsSent = %#v, want empty", store.state.Users["sid-john"].CustomConsumedWarningsSent)
 	}
 }
 

@@ -30,15 +30,19 @@ import (
 
 func ServiceMain(ctx context.Context) error {
 	baseDir := installRoot()
-	cfg, err := config.Load(filepath.Join(baseDir, "config", "config.json"))
-	if err != nil {
-		return err
-	}
-
 	logger := logging.New(
 		filepath.Join(baseDir, "logs", "service.log"),
 		filepath.Join(baseDir, "logs", "api.log"),
 	)
+	restoreConfigWarnings := config.SetWarningLogger(func(format string, args ...any) {
+		logger.Servicef("warning: "+format, args...)
+	})
+	cfg, err := config.Load(filepath.Join(baseDir, "config", "config.json"))
+	restoreConfigWarnings()
+	if err != nil {
+		return err
+	}
+
 	store := state.NewJSONStore(filepath.Join(baseDir, "state", "state.json"))
 	helpers := helperipc.NewServer()
 	detector := session.Detector{}

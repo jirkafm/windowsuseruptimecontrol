@@ -8,10 +8,11 @@ import (
 )
 
 type Engine struct {
-	DefaultDailyAllowanceSec int64
-	ReenforcementDelaySec    int64
-	WarningHalfwayEnabled    bool
-	WarningFiveMinEnabled    bool
+	DefaultDailyAllowanceSec         int64
+	ReenforcementDelaySec            int64
+	WarningHalfwayEnabled            bool
+	WarningFiveMinEnabled            bool
+	CustomConsumedWarningPercentages []int
 }
 
 func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) model.Evaluation {
@@ -63,6 +64,16 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 		result.Messages = append(result.Messages, "You have 30 minutes remaining.")
 		user.HalfwayWarningSent = true
 	}
+	for _, percentage := range e.CustomConsumedWarningPercentages {
+		if customConsumedWarningSent(user, percentage) {
+			continue
+		}
+		if user.ConsumedSec*100 < user.DailyAllowanceSec*int64(percentage) {
+			continue
+		}
+		result.Messages = append(result.Messages, fmt.Sprintf("You have %d minutes remaining.", user.RemainingSec/60))
+		user.CustomConsumedWarningsSent = append(user.CustomConsumedWarningsSent, percentage)
+	}
 	if e.WarningFiveMinEnabled && !user.FiveMinWarningSent && user.RemainingSec <= 300 {
 		result.Messages = append(result.Messages, "You have 5 minutes remaining.")
 		user.FiveMinWarningSent = true
@@ -81,4 +92,13 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 
 func countdown() []string {
 	return []string{"10", "9", "8", "7", "6", "5", "4", "3", "2", "1"}
+}
+
+func customConsumedWarningSent(user model.UserDayState, percentage int) bool {
+	for _, sent := range user.CustomConsumedWarningsSent {
+		if sent == percentage {
+			return true
+		}
+	}
+	return false
 }

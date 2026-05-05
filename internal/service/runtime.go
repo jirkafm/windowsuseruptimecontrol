@@ -82,10 +82,11 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 	}
 
 	engine := policy.Engine{
-		DefaultDailyAllowanceSec: r.Config.DefaultDailyAllowanceSec,
-		ReenforcementDelaySec:    r.Config.ReenforcementDelaySec,
-		WarningHalfwayEnabled:    r.Config.WarningHalfwayEnabled,
-		WarningFiveMinEnabled:    r.Config.WarningFiveMinEnabled,
+		DefaultDailyAllowanceSec:         r.Config.DefaultDailyAllowanceSec,
+		ReenforcementDelaySec:            r.Config.ReenforcementDelaySec,
+		WarningHalfwayEnabled:            r.Config.WarningHalfwayEnabled,
+		WarningFiveMinEnabled:            r.Config.WarningFiveMinEnabled,
+		CustomConsumedWarningPercentages: r.Config.CustomConsumedWarningPercentages,
 	}
 	beforeUser, hadBeforeUser := state.Users[active.UserSID]
 	result := engine.Evaluate(now, active, state, elapsedSec)
@@ -218,14 +219,15 @@ func (r *Runtime) HibernateNow() error {
 
 func (r *Runtime) ConfigView() map[string]any {
 	return map[string]any{
-		"api_bind_address":            r.Config.APIBindAddress,
-		"api_port":                    r.Config.APIPort,
-		"default_daily_allowance_sec": r.Config.DefaultDailyAllowanceSec,
-		"helper_launch_cooldown_sec":  r.Config.HelperLaunchCooldownSec,
-		"reenforcement_delay_sec":     r.Config.ReenforcementDelaySec,
-		"warning_halfway_enabled":     r.Config.WarningHalfwayEnabled,
-		"warning_five_min_enabled":    r.Config.WarningFiveMinEnabled,
-		"log_level":                   r.Config.LogLevel,
+		"api_bind_address":                    r.Config.APIBindAddress,
+		"api_port":                            r.Config.APIPort,
+		"default_daily_allowance_sec":         r.Config.DefaultDailyAllowanceSec,
+		"helper_launch_cooldown_sec":          r.Config.HelperLaunchCooldownSec,
+		"reenforcement_delay_sec":             r.Config.ReenforcementDelaySec,
+		"warning_halfway_enabled":             r.Config.WarningHalfwayEnabled,
+		"warning_five_min_enabled":            r.Config.WarningFiveMinEnabled,
+		"custom_consumed_warning_percentages": r.Config.CustomConsumedWarningPercentages,
+		"log_level":                           r.Config.LogLevel,
 	}
 }
 
@@ -327,6 +329,7 @@ func (r *Runtime) ResetToday(user string) (model.UserDayState, error) {
 	current.StartupWarningSent = false
 	current.HalfwayWarningSent = false
 	current.FiveMinWarningSent = false
+	current.CustomConsumedWarningsSent = nil
 	current.ReenforcementPending = false
 	current.ReenforcementDeadline = time.Time{}
 	state.Users[key] = current

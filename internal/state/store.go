@@ -58,6 +58,7 @@ func (s *JSONStore) LoadOrCreate(now time.Time, defaultDailyAllowanceSec int64) 
 		user.StartupWarningSent = false
 		user.HalfwayWarningSent = false
 		user.FiveMinWarningSent = false
+		user.CustomConsumedWarningsSent = nil
 		user.ReenforcementPending = false
 		user.ReenforcementDeadline = time.Time{}
 		user.LastEnforcementReason = ""
