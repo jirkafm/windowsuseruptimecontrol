@@ -1,17 +1,16 @@
 package helper
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"time"
-
-	"windowsuseruptimecontrol/internal/helperstatus"
 )
-
-const heartbeatTTL = 30 * time.Second
 
 type Launcher struct {
 	HelperPath     string
-	HeartbeatRoot  string
+	HelperURL      string
+	HelperToken    string
 	LaunchCooldown time.Duration
 
 	mu           sync.Mutex
@@ -28,21 +27,15 @@ type launchAttempt struct {
 	StartedAt time.Time
 }
 
-func shouldLaunch(now time.Time, hb helperstatus.Heartbeat, sessionID uint32) bool {
-	return shouldLaunchWithCooldown(now, hb, sessionID, launchAttempt{}, 5*time.Second)
+func shouldLaunch(now time.Time, sessionID uint32) bool {
+	return shouldLaunchWithCooldown(now, sessionID, launchAttempt{}, 5*time.Second)
 }
 
-func shouldLaunchWithCooldown(now time.Time, hb helperstatus.Heartbeat, sessionID uint32, lastLaunch launchAttempt, cooldown time.Duration) bool {
-	if hb.UserSID == "" {
-		if cooldown > 0 && lastLaunch.SessionID == sessionID && now.Sub(lastLaunch.StartedAt) <= cooldown {
-			return false
-		}
-		return true
+func shouldLaunchWithCooldown(now time.Time, sessionID uint32, lastLaunch launchAttempt, cooldown time.Duration) bool {
+	if cooldown > 0 && lastLaunch.SessionID == sessionID && !lastLaunch.StartedAt.IsZero() && now.Sub(lastLaunch.StartedAt) <= cooldown {
+		return false
 	}
-	if hb.SessionID != sessionID {
-		return true
-	}
-	return !helperstatus.IsFresh(hb, now, heartbeatTTL)
+	return true
 }
 
 func (l *Launcher) launchCooldown() time.Duration {
@@ -75,4 +68,18 @@ func defaultLaunchSettings() launchSettings {
 		HideWindow:      true,
 		NoConsoleWindow: true,
 	}
+}
+
+func buildCommandLine(helperPath string, sessionID uint32, helperURL, helperToken string) string {
+	return fmt.Sprintf(
+		"%s --session-id %d --helper-url %s --helper-token %s",
+		quoteArg(helperPath),
+		sessionID,
+		quoteArg(helperURL),
+		quoteArg(helperToken),
+	)
+}
+
+func quoteArg(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 }

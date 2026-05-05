@@ -2,21 +2,25 @@ package runtime
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"windowsuseruptimecontrol/internal/api"
 	"windowsuseruptimecontrol/internal/config"
 	"windowsuseruptimecontrol/internal/helper"
-	"windowsuseruptimecontrol/internal/helperfs"
-	"windowsuseruptimecontrol/internal/helperstatus"
+	"windowsuseruptimecontrol/internal/helperipc"
 	"windowsuseruptimecontrol/internal/logging"
+	"windowsuseruptimecontrol/internal/model"
 	"windowsuseruptimecontrol/internal/service"
 	"windowsuseruptimecontrol/internal/state"
 	helperlauncher "windowsuseruptimecontrol/internal/windows/helper"
@@ -36,18 +40,22 @@ func ServiceMain(ctx context.Context) error {
 		filepath.Join(baseDir, "logs", "api.log"),
 	)
 	store := state.NewJSONStore(filepath.Join(baseDir, "state", "state.json"))
-	bus := helperfs.New(filepath.Join(baseDir, "state", "spool"))
+	helpers := helperipc.NewServer()
 	detector := session.Detector{}
 	powerCtl := power.Controller{}
 	runtime := &service.Runtime{
 		Config:   cfg,
 		Store:    store,
 		Detector: detector,
-		Helper:   bus,
+		Helper:   helpers,
 		Power:    powerCtl,
 	}
 
-	server := api.New(cfg.BearerToken, runtime, logger)
+	helperToken, err := newHelperToken()
+	if err != nil {
+		return err
+	}
+	server := api.NewWithHelper(cfg.BearerToken, runtime, logger, helperToken, helpers)
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", cfg.APIBindAddress, cfg.APIPort),
 		Handler: server,
@@ -65,7 +73,8 @@ func ServiceMain(ctx context.Context) error {
 
 	launcher := helperlauncher.Launcher{
 		HelperPath:     cfg.HelperPath,
-		HeartbeatRoot:  filepath.Join(baseDir, "state", "heartbeats"),
+		HelperURL:      helperStreamURL(cfg),
+		HelperToken:    helperToken,
 		LaunchCooldown: time.Duration(cfg.HelperLaunchCooldownSec) * time.Second,
 	}
 
@@ -83,7 +92,7 @@ func ServiceMain(ctx context.Context) error {
 				logger.Servicef("active user detection failed: %v", err)
 				continue
 			}
-			if ok {
+			if ok && !helpers.Connected(active.UserSID) {
 				_ = launcher.EnsureRunning(ctx, active.SessionID, active.UserSID)
 			}
 			if err := runtime.Tick(ctx, now, 1); err != nil {
@@ -99,46 +108,13 @@ func HelperMain(ctx context.Context) error {
 		return err
 	}
 
-	baseDir := installRoot()
-	bus := helperfs.New(filepath.Join(baseDir, "state", "spool"))
-	heartbeats := helperstatus.New(filepath.Join(baseDir, "state", "heartbeats"))
-	speaker := helper.WindowsSpeaker{}
-	logger := logging.New(
-		filepath.Join(baseDir, "logs", "helper-service.log"),
-		filepath.Join(baseDir, "logs", "helper-api.log"),
-	)
-	sessionID := helperSessionID()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			if err := heartbeats.Record(current.Uid, helperstatus.Heartbeat{
-				UserSID:   current.Uid,
-				SessionID: sessionID,
-				PID:       os.Getpid(),
-				UpdatedAt: time.Now(),
-			}); err != nil {
-				logger.Servicef("heartbeat write failed: %v", err)
-			}
-			commands, err := bus.Poll(current.Uid)
-			if err != nil {
-				logger.Servicef("helper poll failed: %v", err)
-				continue
-			}
-			for _, cmd := range commands {
-				if cmd.Type == "speak" {
-					if err := speaker.Speak(cmd.Message); err != nil {
-						logger.Servicef("speak failed: %v", err)
-					}
-				}
-			}
-		}
+	streamURL, token, sessionID, err := helperConnectionArgs(os.Args)
+	if err != nil {
+		return err
 	}
+
+	rt := helper.Runtime{Speaker: helper.WindowsSpeaker{}}
+	return rt.RunHTTPStream(ctx, streamURL, token, current.Uid, sessionID)
 }
 
 func installRoot() string {
@@ -159,15 +135,52 @@ func isWindowsLikePath() bool {
 }
 
 func helperSessionID() uint32 {
-	for idx := 0; idx < len(os.Args)-1; idx++ {
-		if os.Args[idx] != "--session-id" {
-			continue
-		}
-		value, err := strconv.ParseUint(os.Args[idx+1], 10, 32)
-		if err != nil {
-			return 0
-		}
-		return uint32(value)
+	_, _, sessionID, err := helperConnectionArgs(os.Args)
+	if err != nil {
+		return 0
 	}
-	return 0
+	return sessionID
+}
+
+func helperConnectionArgs(args []string) (string, string, uint32, error) {
+	var streamURL string
+	var token string
+	var sessionID uint32
+	for idx := 0; idx < len(args)-1; idx++ {
+		switch args[idx] {
+		case "--helper-url":
+			streamURL = args[idx+1]
+		case "--helper-token":
+			token = args[idx+1]
+		case "--session-id":
+			value, err := strconv.ParseUint(args[idx+1], 10, 32)
+			if err != nil {
+				return "", "", 0, err
+			}
+			sessionID = uint32(value)
+		}
+	}
+	if strings.TrimSpace(streamURL) == "" {
+		return "", "", 0, fmt.Errorf("helper-url is required")
+	}
+	if strings.TrimSpace(token) == "" {
+		return "", "", 0, fmt.Errorf("helper-token is required")
+	}
+	return streamURL, token, sessionID, nil
+}
+
+func helperStreamURL(cfg model.Config) string {
+	host := cfg.APIBindAddress
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(cfg.APIPort)) + "/internal/helper/stream"
+}
+
+func newHelperToken() (string, error) {
+	data := make([]byte, 32)
+	if _, err := rand.Read(data); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(data), nil
 }

@@ -250,7 +250,7 @@ Stop-Process -Name activityhelper -Force
 
 - Wait up to 30 seconds.
 - Expected:
-  - service detects missing or stale helper heartbeat
+  - service detects the missing active helper stream
   - helper process is relaunched
   - later announcements still produce TTS
 

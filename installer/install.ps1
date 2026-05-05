@@ -14,10 +14,8 @@ $binRoot = Join-Path $InstallRoot "bin"
 $cfgRoot = Join-Path $InstallRoot "config"
 $logRoot = Join-Path $InstallRoot "logs"
 $stateRoot = Join-Path $InstallRoot "state"
-$spoolRoot = Join-Path $stateRoot "spool"
-$heartbeatRoot = Join-Path $stateRoot "heartbeats"
 
-New-Item -ItemType Directory -Force -Path $binRoot, $cfgRoot, $logRoot, $stateRoot, $spoolRoot, $heartbeatRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $binRoot, $cfgRoot, $logRoot, $stateRoot | Out-Null
 Copy-Item "$PSScriptRoot\..\dist\activitysvc.exe" (Join-Path $binRoot "activitysvc.exe") -Force
 Copy-Item "$PSScriptRoot\..\dist\activityhelper.exe" (Join-Path $binRoot "activityhelper.exe") -Force
 
@@ -26,11 +24,7 @@ icacls $binRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(O
 icacls $cfgRoot /inheritance:r | Out-Null
 icacls $cfgRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-Null
 icacls $stateRoot /inheritance:r | Out-Null
-icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)RX" | Out-Null
-icacls $spoolRoot /inheritance:r | Out-Null
-icacls $spoolRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)M" | Out-Null
-icacls $heartbeatRoot /inheritance:r | Out-Null
-icacls $heartbeatRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)M" | Out-Null
+icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-Null
 
 @{
     api_bind_address = "0.0.0.0"

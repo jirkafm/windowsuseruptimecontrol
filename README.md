@@ -4,7 +4,7 @@ WindowsUserUptimeControl is a Windows-only uptime enforcer built around a backgr
 
 ## Highlights
 - **Per-user daily uptime enforcement** — the state store keeps a separate daily allowance, consumed time, remaining time, and warning/enforcement flags for each tracked Windows SID so one user exhausting their time does not overwrite another user’s quota.
-- **Active console detection with spoken warnings** — the service only counts usage for the active console session, launches `activityhelper.exe` into that session, and uses the helper IPC path plus heartbeat tracking to deliver startup, halfway, five-minute, and countdown announcements.
+- **Active console detection with spoken warnings** — the service only counts usage for the active console session, launches one `activityhelper.exe` per active user, and delivers startup, halfway, five-minute, and countdown announcements over a private live HTTP stream.
 - **Admin API plus restart reenforcement** — the HTTP API exposes health, config, quota, reset, announcement, logs, and immediate-enforcement operations behind a bearer token, while the runtime also supports same-day reenforcement after reboot with a configurable delay before enforcing again.
 
 ## Quick Start
@@ -14,7 +14,7 @@ WindowsUserUptimeControl is a Windows-only uptime enforcer built around a backgr
 
 ## Usage Walkthrough
 1. Install and verify the service: the installer copies both binaries into `C:\ProgramData\Activity\bin`, creates `config\config.json`, applies ACLs to config and state paths, opens the configured firewall port, and starts `WindowsUserUptimeControlActivityService`.
-2. Let a user log in normally: the service detects the active console session, relaunches the helper if its heartbeat is missing or stale, and begins recording usage into the per-user daily state for that Windows SID.
+2. Let a user log in normally: the service detects the active console session, launches the helper if no active helper stream exists for that user, and begins recording usage into the per-user daily state for that Windows SID.
 3. Adjust or inspect quotas through the API: use `GET /v1/users` or `GET /v1/users/{userId}/status` to inspect current usage, then `POST /v1/users/{userId}/allowance`, `POST /v1/users/{userId}/adjust`, or `POST /v1/users/{userId}/reset-today` to change the current day’s allowance or state.
 4. Observe warning and enforcement behavior: as the allowance is consumed, the helper speaks warning milestones and the final `10` to `1` countdown. When the timer is exhausted, the service attempts hibernation first and falls back to shutdown if hibernation is unavailable.
 
@@ -78,13 +78,13 @@ Manual validation steps for installation, ACLs, helper relaunch, API auth, user 
 
 ## Project Layout
 - `cmd/activitysvc` — service entrypoint that starts the Windows service runner and main runtime loop.
-- `cmd/activityhelper` — helper entrypoint that polls the IPC bus, reports heartbeats, and speaks queued messages.
+- `cmd/activityhelper` — helper entrypoint that connects to the service's private helper stream and speaks received commands.
 - `internal/runtime` — wiring for config loading, HTTP server startup, helper launch checks, and the top-level service/helper loops.
 - `internal/service` — quota runtime logic, quota mutation methods used by the API, and hibernation/shutdown orchestration.
 - `internal/policy` — daily allowance evaluation, warning thresholds, and enforcement decision rules.
 - `internal/api` — HTTP handlers for health, config, users, announcements, logs, and immediate enforcement.
 - `internal/state` — JSON-backed persisted daily user state.
-- `internal/helperfs`, `internal/helperipc`, `internal/helperstatus` — message spooling, helper command protocol, and helper heartbeat tracking.
+- `internal/helperipc` — active helper registry and helper command protocol.
 - `internal/windows/session`, `internal/windows/helper`, `internal/windows/power`, `internal/windows/service` — Windows-specific adapters for active user detection, helper launching, power actions, and service hosting.
 - `installer` — PowerShell install, uninstall, and installer script tests.
 - `docs` — validation checklist and project planning/spec artifacts.

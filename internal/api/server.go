@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"windowsuseruptimecontrol/internal/helperipc"
 	"windowsuseruptimecontrol/internal/model"
 )
 
@@ -24,11 +26,17 @@ type Logger interface {
 	Recent(limit int) ([]string, error)
 }
 
+type HelperRegistry interface {
+	Register(userSID string, sessionID uint32) (<-chan helperipc.Command, func())
+}
+
 type Server struct {
-	token string
-	admin AdminController
-	log   Logger
-	mux   *http.ServeMux
+	token       string
+	helperToken string
+	admin       AdminController
+	log         Logger
+	helpers     HelperRegistry
+	mux         *http.ServeMux
 }
 
 type endpointInfo struct {
@@ -40,11 +48,17 @@ type endpointInfo struct {
 }
 
 func New(token string, admin AdminController, logger Logger) *Server {
+	return NewWithHelper(token, admin, logger, "", nil)
+}
+
+func NewWithHelper(token string, admin AdminController, logger Logger, helperToken string, helpers HelperRegistry) *Server {
 	s := &Server{
-		token: token,
-		admin: admin,
-		log:   logger,
-		mux:   http.NewServeMux(),
+		token:       token,
+		helperToken: helperToken,
+		admin:       admin,
+		log:         logger,
+		helpers:     helpers,
+		mux:         http.NewServeMux(),
 	}
 	s.routes()
 	return s
@@ -55,6 +69,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
+	s.mux.HandleFunc("/internal/helper/stream", s.handleHelperStream)
+
 	s.mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		s.logRequest(r, http.StatusOK)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -250,6 +266,60 @@ func (s *Server) routes() {
 		s.logRequest(r, http.StatusOK)
 		writeJSON(w, http.StatusOK, map[string]any{"lines": lines})
 	})
+}
+
+func (s *Server) handleHelperStream(w http.ResponseWriter, r *http.Request) {
+	if s.helpers == nil || s.helperToken == "" || r.Header.Get("Authorization") != "Bearer "+s.helperToken {
+		s.logRequest(r, http.StatusUnauthorized)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet {
+		s.logRequest(r, http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userSID := strings.TrimSpace(r.URL.Query().Get("user_sid"))
+	if userSID == "" {
+		s.logRequest(r, http.StatusBadRequest)
+		http.Error(w, "user_sid is required", http.StatusBadRequest)
+		return
+	}
+	sessionID, err := strconv.ParseUint(r.URL.Query().Get("session_id"), 10, 32)
+	if err != nil {
+		s.logRequest(r, http.StatusBadRequest)
+		http.Error(w, "session_id is required", http.StatusBadRequest)
+		return
+	}
+
+	commands, unregister := s.helpers.Register(userSID, uint32(sessionID))
+	defer unregister()
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.WriteHeader(http.StatusOK)
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	s.logRequest(r, http.StatusOK)
+
+	encoder := json.NewEncoder(w)
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case cmd, ok := <-commands:
+			if !ok {
+				return
+			}
+			if err := encoder.Encode(cmd); err != nil {
+				return
+			}
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		}
+	}
 }
 
 func (s *Server) authorized(r *http.Request) bool {

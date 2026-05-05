@@ -2,13 +2,16 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"windowsuseruptimecontrol/internal/helperipc"
 	"windowsuseruptimecontrol/internal/model"
 )
 
@@ -161,4 +164,67 @@ func TestInfoEndpointListsKeyEndpointsAndExamples(t *testing.T) {
 			t.Fatalf("response missing %q in %s", want, body)
 		}
 	}
+}
+
+func TestHelperStreamRequiresHelperToken(t *testing.T) {
+	t.Parallel()
+
+	helpers := helperipc.NewServer()
+	server := NewWithHelper("token-123", &fakeAdmin{}, fakeLogger{}, "helper-token", helpers)
+	req := httptest.NewRequest(http.MethodGet, "/internal/helper/stream?user_sid=sid-john&session_id=5", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestHelperStreamDeliversCommandsToAuthenticatedHelper(t *testing.T) {
+	t.Parallel()
+
+	helpers := helperipc.NewServer()
+	server := NewWithHelper("token-123", &fakeAdmin{}, fakeLogger{}, "helper-token", helpers)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/helper/stream?user_sid=sid-john&session_id=5", nil).WithContext(ctx)
+	req.Header.Set("Authorization", "Bearer helper-token")
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		server.ServeHTTP(rec, req)
+		close(done)
+	}()
+
+	waitFor(t, func() bool { return helpers.Connected("sid-john") }, "helper connection")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if err := helpers.Send(context.Background(), "sid-john", helperipc.Command{Type: helperipc.CommandSpeak, Message: "hello"}); err != nil {
+		t.Fatalf("Send error: %v", err)
+	}
+
+	waitFor(t, func() bool { return strings.Contains(rec.Body.String(), `"message":"hello"`) }, "streamed command")
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for helper stream to close")
+	}
+}
+
+func waitFor(t *testing.T, ok func() bool, label string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if ok() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", label)
 }

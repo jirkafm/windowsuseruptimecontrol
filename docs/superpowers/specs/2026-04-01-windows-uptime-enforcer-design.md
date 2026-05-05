@@ -84,7 +84,7 @@ The helper runs in the logged-in user's interactive session. It is not authorita
 - Windows TTS playback
 - user-facing spoken warnings
 - optional transient desktop notifications if added later
-- reporting heartbeat/readiness to the service
+- maintaining a live readiness connection to the service
 
 The helper receives commands from the service over a local-only IPC channel. If a user kills the helper process, the service relaunches it for the active console session. Killing the helper never disables enforcement.
 
@@ -123,7 +123,7 @@ The helper starts on user logon and also may be started on demand by the service
 1. connects to the local IPC endpoint exposed by the service
 2. registers the current session id and username
 3. waits for speech commands
-4. sends heartbeats so the service can detect failure
+4. keeps the service connection open so the service can detect failure
 
 The service treats the helper as replaceable and untrusted.
 

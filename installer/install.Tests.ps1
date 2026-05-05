@@ -8,10 +8,9 @@ Describe "install.ps1" {
         $script | Should -Match "icacls"
         $script | Should -Match '\(OI\)\(CI\)F'
         $script | Should -Match '\(OI\)\(CI\)RX'
-        $script | Should -Match "spoolRoot"
-        $script | Should -Match "heartbeatRoot"
-        $script | Should -Match 'Users:\(OI\)\(CI\)M'
+        $script | Should -Not -Match 'Users:\(OI\)\(CI\)M'
         $script | Should -Match 'cfgRoot /grant:r "Administrators:\(OI\)\(CI\)F" "SYSTEM:\(OI\)\(CI\)F"'
+        $script | Should -Match 'stateRoot /grant:r "Administrators:\(OI\)\(CI\)F" "SYSTEM:\(OI\)\(CI\)F"'
         $script | Should -Not -Match 'cfgRoot /grant:r .*Users:\(OI\)\(CI\)RX'
         $script | Should -Match "sc\.exe sdset WindowsUserUptimeControlActivityService"
         $script | Should -Match ";;;SY"

@@ -4,15 +4,12 @@ package helper
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-
-	"windowsuseruptimecontrol/internal/helperstatus"
 )
 
 func (l *Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID string) error {
@@ -26,10 +23,8 @@ func (l *Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID 
 		return nil
 	}
 
-	store := helperstatus.New(l.HeartbeatRoot)
-	hb, err := store.Load(userSID)
 	now := time.Now()
-	if !shouldLaunchWithCooldown(now, hb, sessionID, l.lastLaunch(userSID), l.launchCooldown()) {
+	if !shouldLaunchWithCooldown(now, sessionID, l.lastLaunch(userSID), l.launchCooldown()) {
 		return nil
 	}
 
@@ -46,7 +41,7 @@ func (l *Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID 
 	defer primary.Close()
 
 	dir := filepath.Dir(l.HelperPath)
-	commandLine := fmt.Sprintf("\"%s\" --session-id %d", l.HelperPath, sessionID)
+	commandLine := buildCommandLine(l.HelperPath, sessionID, l.HelperURL, l.HelperToken)
 	commandLinePtr, err := windows.UTF16PtrFromString(commandLine)
 	if err != nil {
 		return err

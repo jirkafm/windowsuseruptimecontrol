@@ -239,7 +239,7 @@ func TestTickPersistsPolicyStateWhenHelperNotificationFails(t *testing.T) {
 		},
 		Store:    store,
 		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
-		Helper:   &fakeHelperBus{err: errors.New("spool unavailable")},
+		Helper:   &fakeHelperBus{err: errors.New("helper unavailable")},
 		Power:    &fakePower{},
 	}
 
@@ -281,7 +281,7 @@ func TestTickStillHibernatesWhenCountdownNotificationFails(t *testing.T) {
 		},
 		Store:    store,
 		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
-		Helper:   &fakeHelperBus{err: errors.New("spool unavailable")},
+		Helper:   &fakeHelperBus{err: errors.New("helper unavailable")},
 		Power:    power,
 	}
 
