@@ -49,6 +49,7 @@ func ServiceMain(ctx context.Context) error {
 		Detector: detector,
 		Helper:   helpers,
 		Power:    powerCtl,
+		Log:      logger,
 	}
 
 	helperToken, err := newHelperToken()
@@ -93,7 +94,10 @@ func ServiceMain(ctx context.Context) error {
 				continue
 			}
 			if ok && !helpers.Connected(active.UserSID) {
-				_ = launcher.EnsureRunning(ctx, active.SessionID, active.UserSID)
+				logger.Servicef("helper launch requested username=%s sid=%s session=%d", active.Username, active.UserSID, active.SessionID)
+				if err := launcher.EnsureRunning(ctx, active.SessionID, active.UserSID); err != nil {
+					logger.Servicef("helper launch failed username=%s sid=%s session=%d error=%v", active.Username, active.UserSID, active.SessionID, err)
+				}
 			}
 			if err := runtime.Tick(ctx, now, 1); err != nil {
 				logger.Servicef("tick failed: %v", err)

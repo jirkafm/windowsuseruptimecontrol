@@ -162,6 +162,13 @@ func (s *Server) routes() {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			s.logAdminAction(
+				"admin adjusted user quota user=%s delta_sec=%d remaining_sec=%d allowance_sec=%d",
+				userID,
+				req.DeltaSec,
+				user.RemainingSec,
+				user.DailyAllowanceSec,
+			)
 			s.logRequest(r, http.StatusOK)
 			writeJSON(w, http.StatusOK, user)
 		case r.Method == http.MethodPost && action == "allowance":
@@ -179,6 +186,12 @@ func (s *Server) routes() {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			s.logAdminAction(
+				"admin set user allowance user=%s allowance_sec=%d remaining_sec=%d",
+				userID,
+				user.DailyAllowanceSec,
+				user.RemainingSec,
+			)
 			s.logRequest(r, http.StatusOK)
 			writeJSON(w, http.StatusOK, user)
 		case r.Method == http.MethodPost && action == "reset-today":
@@ -188,6 +201,12 @@ func (s *Server) routes() {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			s.logAdminAction(
+				"admin reset today's quota user=%s remaining_sec=%d allowance_sec=%d",
+				userID,
+				user.RemainingSec,
+				user.DailyAllowanceSec,
+			)
 			s.logRequest(r, http.StatusOK)
 			writeJSON(w, http.StatusOK, user)
 		case r.Method == http.MethodGet && action == "status":
@@ -341,6 +360,12 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 func (s *Server) logRequest(r *http.Request, status int) {
 	if s.log != nil {
 		s.log.APIf("%s %s remote=%s status=%d", r.Method, r.URL.Path, r.RemoteAddr, status)
+	}
+}
+
+func (s *Server) logAdminAction(format string, args ...any) {
+	if s.log != nil {
+		s.log.APIf(format, args...)
 	}
 }
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -48,6 +49,23 @@ type fakePower struct {
 	hibernateCalls int
 	shutdownCalls  int
 	onHibernate    func()
+}
+
+type fakeServiceLogger struct {
+	lines []string
+}
+
+func (f *fakeServiceLogger) Servicef(format string, args ...any) {
+	f.lines = append(f.lines, fmt.Sprintf(format, args...))
+}
+
+func (f *fakeServiceLogger) contains(want string) bool {
+	for _, line := range f.lines {
+		if strings.Contains(line, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *fakePower) Hibernate(context.Context) error {
@@ -109,6 +127,126 @@ func TestTickConsumesTimeAndSpeaksPolicyMessages(t *testing.T) {
 	}
 	if power.hibernateCalls != 0 {
 		t.Fatalf("hibernateCalls = %d, want 0", power.hibernateCalls)
+	}
+}
+
+func TestTickLogsUptimeControlStartOnceForActiveUser(t *testing.T) {
+	t.Parallel()
+
+	logger := &fakeServiceLogger{}
+	rt := Runtime{
+		Config: model.Config{
+			DefaultDailyAllowanceSec: 3600,
+			ReenforcementDelaySec:    180,
+		},
+		Store: &fakeStore{
+			state: model.StateFile{
+				ServiceDate: "2026-04-01",
+				Users:       map[string]model.UserDayState{},
+			},
+		},
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   &fakeHelperBus{},
+		Power:    &fakePower{},
+		Log:      logger,
+	}
+
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	if err := rt.Tick(context.Background(), now, 1); err != nil {
+		t.Fatalf("first Tick error: %v", err)
+	}
+	if err := rt.Tick(context.Background(), now.Add(time.Second), 1); err != nil {
+		t.Fatalf("second Tick error: %v", err)
+	}
+
+	count := 0
+	for _, line := range logger.lines {
+		if strings.Contains(line, "uptime control started for user") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("start log count = %d in %#v, want 1", count, logger.lines)
+	}
+}
+
+func TestTickLogsNoActiveUserPauseOnce(t *testing.T) {
+	t.Parallel()
+
+	logger := &fakeServiceLogger{}
+	rt := Runtime{
+		Config:   model.Config{DefaultDailyAllowanceSec: 3600},
+		Store:    &fakeStore{state: model.StateFile{ServiceDate: "2026-04-01", Users: map[string]model.UserDayState{}}},
+		Detector: fakeDetector{ok: false},
+		Helper:   &fakeHelperBus{},
+		Power:    &fakePower{},
+		Log:      logger,
+	}
+
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	if err := rt.Tick(context.Background(), now, 1); err != nil {
+		t.Fatalf("first Tick error: %v", err)
+	}
+	if err := rt.Tick(context.Background(), now.Add(time.Second), 1); err != nil {
+		t.Fatalf("second Tick error: %v", err)
+	}
+
+	count := 0
+	for _, line := range logger.lines {
+		if strings.Contains(line, "uptime control paused: no active console user") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("pause log count = %d in %#v, want 1", count, logger.lines)
+	}
+}
+
+func TestTickLogsTimeDepletionAndEnforcement(t *testing.T) {
+	t.Parallel()
+
+	logger := &fakeServiceLogger{}
+	rt := Runtime{
+		Config: model.Config{
+			DefaultDailyAllowanceSec: 3600,
+			ReenforcementDelaySec:    180,
+		},
+		Store: &fakeStore{
+			state: model.StateFile{
+				ServiceDate: "2026-04-01",
+				Users: map[string]model.UserDayState{
+					"sid-john": {
+						UserSID:            "sid-john",
+						Username:           "John",
+						Date:               "2026-04-01",
+						DailyAllowanceSec:  3600,
+						ConsumedSec:        3599,
+						RemainingSec:       1,
+						StartupWarningSent: true,
+						HalfwayWarningSent: true,
+						FiveMinWarningSent: true,
+					},
+				},
+			},
+		},
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   &fakeHelperBus{},
+		Power:    &fakePower{},
+		Log:      logger,
+	}
+
+	if err := rt.Tick(context.Background(), time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC), 1); err != nil {
+		t.Fatalf("Tick error: %v", err)
+	}
+
+	for _, want := range []string{
+		"user time depleted",
+		"enforcement hibernate requested",
+		"hibernate completed",
+	} {
+		if !logger.contains(want) {
+			t.Fatalf("missing log containing %q in %#v", want, logger.lines)
+		}
 	}
 }
 

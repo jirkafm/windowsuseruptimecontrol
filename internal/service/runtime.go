@@ -30,6 +30,10 @@ type PowerController interface {
 	Shutdown(ctx context.Context) error
 }
 
+type Logger interface {
+	Servicef(format string, args ...any)
+}
+
 type Runtime struct {
 	mu       sync.Mutex
 	Config   model.Config
@@ -37,9 +41,12 @@ type Runtime struct {
 	Detector Detector
 	Helper   HelperBus
 	Power    PowerController
+	Log      Logger
 
 	lastTick                    time.Time
 	restartReenforcementPending bool
+	activeTrackingSID           string
+	noActiveLogged              bool
 }
 
 func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) error {
@@ -61,8 +68,14 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 		return err
 	}
 	if !ok {
+		if !r.noActiveLogged {
+			r.logf("uptime control paused: no active console user")
+			r.noActiveLogged = true
+		}
+		r.activeTrackingSID = ""
 		return r.Store.Save(state)
 	}
+	r.noActiveLogged = false
 	if r.restartReenforcementPending {
 		state = restartReenforcementDelay(state, active.UserSID)
 		r.restartReenforcementPending = false
@@ -74,10 +87,50 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 		WarningHalfwayEnabled:    r.Config.WarningHalfwayEnabled,
 		WarningFiveMinEnabled:    r.Config.WarningFiveMinEnabled,
 	}
+	beforeUser, hadBeforeUser := state.Users[active.UserSID]
 	result := engine.Evaluate(now, active, state, elapsedSec)
+	afterUser := result.State.Users[active.UserSID]
 
 	if err := r.Store.Save(result.State); err != nil {
 		return err
+	}
+
+	if r.activeTrackingSID != active.UserSID {
+		r.logf(
+			"uptime control started for user username=%s sid=%s session=%d allowance_sec=%d remaining_sec=%d",
+			active.Username,
+			active.UserSID,
+			active.SessionID,
+			afterUser.DailyAllowanceSec,
+			afterUser.RemainingSec,
+		)
+		r.activeTrackingSID = active.UserSID
+	}
+	if (!hadBeforeUser || !beforeUser.Exhausted) && afterUser.Exhausted {
+		r.logf(
+			"user time depleted username=%s sid=%s consumed_sec=%d allowance_sec=%d reason=%q",
+			afterUser.Username,
+			afterUser.UserSID,
+			afterUser.ConsumedSec,
+			afterUser.DailyAllowanceSec,
+			afterUser.LastEnforcementReason,
+		)
+	}
+	if hadBeforeUser && beforeUser.Exhausted && !beforeUser.ReenforcementPending && afterUser.ReenforcementPending {
+		r.logf(
+			"reenforcement delay started username=%s sid=%s deadline=%s delay_sec=%d",
+			afterUser.Username,
+			afterUser.UserSID,
+			afterUser.ReenforcementDeadline.Format(time.RFC3339),
+			r.Config.ReenforcementDelaySec,
+		)
+	}
+	if hadBeforeUser && beforeUser.Exhausted && beforeUser.ReenforcementPending && !beforeUser.ReenforcementDeadline.After(now) && result.TriggerEnforcement {
+		r.logf(
+			"reenforcement delay expired username=%s sid=%s triggering_enforcement=true",
+			afterUser.Username,
+			afterUser.UserSID,
+		)
 	}
 
 	var notifyErr error
@@ -88,19 +141,38 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 	}
 
 	for _, message := range result.Messages {
+		r.logf(
+			"quota message issued username=%s sid=%s remaining_sec=%d message=%q",
+			afterUser.Username,
+			afterUser.UserSID,
+			afterUser.RemainingSec,
+			message,
+		)
 		speak(message)
 	}
 	if result.TriggerEnforcement {
 		for _, number := range result.Countdown {
 			speak(number)
 		}
+		r.logf("enforcement hibernate requested username=%s sid=%s", afterUser.Username, afterUser.UserSID)
 		if err := r.Power.Hibernate(ctx); err != nil {
+			r.logf("hibernate failed; attempting shutdown username=%s sid=%s error=%v", afterUser.Username, afterUser.UserSID, err)
 			if shutdownErr := r.Power.Shutdown(ctx); shutdownErr != nil {
+				r.logf("shutdown fallback failed username=%s sid=%s error=%v", afterUser.Username, afterUser.UserSID, shutdownErr)
 				return errors.Join(notifyErr, err, shutdownErr)
 			}
+			r.logf("shutdown fallback completed username=%s sid=%s", afterUser.Username, afterUser.UserSID)
+		} else {
+			r.logf("hibernate completed username=%s sid=%s", afterUser.Username, afterUser.UserSID)
 		}
 	}
 	return notifyErr
+}
+
+func (r *Runtime) logf(format string, args ...any) {
+	if r.Log != nil {
+		r.Log.Servicef(format, args...)
+	}
 }
 
 func (r *Runtime) shouldRestartReenforcement(now time.Time) bool {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,6 +27,25 @@ type fakeLogger struct{}
 func (fakeLogger) APIf(string, ...any) {}
 
 func (fakeLogger) Recent(int) ([]string, error) { return []string{"line1"}, nil }
+
+type captureLogger struct {
+	lines []string
+}
+
+func (c *captureLogger) APIf(format string, args ...any) {
+	c.lines = append(c.lines, fmt.Sprintf(format, args...))
+}
+
+func (c *captureLogger) Recent(int) ([]string, error) { return c.lines, nil }
+
+func (c *captureLogger) contains(want string) bool {
+	for _, line := range c.lines {
+		if strings.Contains(line, want) {
+			return true
+		}
+	}
+	return false
+}
 
 func (f *fakeAdmin) State() model.StateFile { return f.state }
 
@@ -118,6 +138,49 @@ func TestAdjustEndpointAppliesDelta(t *testing.T) {
 	}
 	if admin.lastAdjustDelta != 300 {
 		t.Fatalf("lastAdjustDelta = %d, want 300", admin.lastAdjustDelta)
+	}
+}
+
+func TestAdjustEndpointLogsAdminQuotaMutation(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{
+		state: model.StateFile{
+			ServiceDate: "2026-04-01",
+			Users: map[string]model.UserDayState{
+				"sid-john": {
+					UserSID:           "sid-john",
+					Username:          "John",
+					Date:              "2026-04-01",
+					DailyAllowanceSec: 3600,
+					ConsumedSec:       600,
+					RemainingSec:      3000,
+				},
+			},
+		},
+	}
+	logger := &captureLogger{}
+	server := New("token-123", admin, logger)
+
+	body, _ := json.Marshal(map[string]int64{"delta_sec": 300})
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/sid-john/adjust", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer token-123")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	for _, want := range []string{
+		"admin adjusted user quota",
+		"user=sid-john",
+		"delta_sec=300",
+		"remaining_sec=3300",
+	} {
+		if !logger.contains(want) {
+			t.Fatalf("missing log containing %q in %#v", want, logger.lines)
+		}
 	}
 }
 
