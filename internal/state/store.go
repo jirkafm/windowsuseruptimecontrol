@@ -23,7 +23,11 @@ func (s *JSONStore) LoadOrCreate(now time.Time, defaultDailyAllowanceSec int64) 
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return model.StateFile{ServiceDate: date, Users: map[string]model.UserDayState{}}, nil
+			return model.StateFile{
+				ServiceDate: date,
+				Users:       map[string]model.UserDayState{},
+				WeeklyUsers: map[string]model.WeeklyUserState{},
+			}, nil
 		}
 		return model.StateFile{}, fmt.Errorf("read state: %w", err)
 	}
@@ -34,11 +38,18 @@ func (s *JSONStore) LoadOrCreate(now time.Time, defaultDailyAllowanceSec int64) 
 		if renameErr := os.Rename(s.path, backup); renameErr != nil {
 			return model.StateFile{}, fmt.Errorf("rename corrupt state: %w", renameErr)
 		}
-		return model.StateFile{ServiceDate: date, Users: map[string]model.UserDayState{}}, nil
+		return model.StateFile{
+			ServiceDate: date,
+			Users:       map[string]model.UserDayState{},
+			WeeklyUsers: map[string]model.WeeklyUserState{},
+		}, nil
 	}
 
 	if state.Users == nil {
 		state.Users = map[string]model.UserDayState{}
+	}
+	if state.WeeklyUsers == nil {
+		state.WeeklyUsers = map[string]model.WeeklyUserState{}
 	}
 
 	for sid, user := range state.Users {

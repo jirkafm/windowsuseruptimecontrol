@@ -80,6 +80,26 @@ func TestLoadOrCreateRenamesCorruptState(t *testing.T) {
 	}
 }
 
+func TestLoadOrCreateInitializesWeeklyUsersMap(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	raw := []byte(`{"service_date":"2026-05-12","users":{}}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	store := NewJSONStore(path)
+	got, err := store.LoadOrCreate(time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC), 3600)
+	if err != nil {
+		t.Fatalf("LoadOrCreate error: %v", err)
+	}
+	if got.WeeklyUsers == nil {
+		t.Fatal("WeeklyUsers = nil, want initialized map")
+	}
+}
+
 func TestUpsertUserPersistsCalculatedRemainingTime(t *testing.T) {
 	t.Parallel()
 
