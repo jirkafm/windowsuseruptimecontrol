@@ -317,18 +317,22 @@ func (r *Runtime) HibernateNow() error {
 
 func (r *Runtime) ConfigView() map[string]any {
 	return map[string]any{
-		"api_bind_address":            r.Config.APIBindAddress,
-		"api_port":                    r.Config.APIPort,
-		"default_daily_allowance_sec": r.Config.DefaultDailyAllowanceSec,
-		"helper_launch_cooldown_sec":  r.Config.HelperLaunchCooldownSec,
-		"reenforcement_delay_sec":     r.Config.ReenforcementDelaySec,
-		"warning_halfway_enabled":     r.Config.WarningHalfwayEnabled,
-		"warning_five_min_enabled":    r.Config.WarningFiveMinEnabled,
-		"log_level":                   r.Config.LogLevel,
-		"log_max_size_mb":             r.Config.LogMaxSizeMB,
-		"log_max_backups":             r.Config.LogMaxBackups,
-		"log_max_age_days":            r.Config.LogMaxAgeDays,
-		"log_compress":                r.Config.LogCompress,
+		"api_bind_address":             r.Config.APIBindAddress,
+		"api_port":                     r.Config.APIPort,
+		"quota_mode":                   r.Config.QuotaMode,
+		"default_daily_allowance_sec":  r.Config.DefaultDailyAllowanceSec,
+		"default_weekly_allowance_sec": r.Config.DefaultWeeklyAllowanceSec,
+		"user_ui_enabled":              r.Config.UserUIEnabled,
+		"user_ui_port":                 r.Config.UserUIPort,
+		"helper_launch_cooldown_sec":   r.Config.HelperLaunchCooldownSec,
+		"reenforcement_delay_sec":      r.Config.ReenforcementDelaySec,
+		"warning_halfway_enabled":      r.Config.WarningHalfwayEnabled,
+		"warning_five_min_enabled":     r.Config.WarningFiveMinEnabled,
+		"log_level":                    r.Config.LogLevel,
+		"log_max_size_mb":              r.Config.LogMaxSizeMB,
+		"log_max_backups":              r.Config.LogMaxBackups,
+		"log_max_age_days":             r.Config.LogMaxAgeDays,
+		"log_compress":                 r.Config.LogCompress,
 	}
 }
 
@@ -411,6 +415,83 @@ func (r *Runtime) SetAllowance(user string, sec int64) (model.UserDayState, erro
 	return current, nil
 }
 
+func (r *Runtime) LookupWeeklyUser(user string, now time.Time) (model.WeeklyUserState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, err := r.Store.LoadOrCreate(now, r.Config.DefaultDailyAllowanceSec)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	key, err := resolveWeeklyUserKey(state, user)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	current := state.WeeklyUsers[key]
+	current.RecalculateWeeklyRemaining()
+	return current, nil
+}
+
+func (r *Runtime) SetWeeklyAllowance(user string, sec int64) (model.WeeklyUserState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if sec <= 0 {
+		return model.WeeklyUserState{}, fmt.Errorf("weekly allowance must be positive")
+	}
+	state, err := r.Store.LoadOrCreate(time.Now(), r.Config.DefaultDailyAllowanceSec)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	key, err := resolveWeeklyUserKey(state, user)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	current := state.WeeklyUsers[key]
+	if current.WeeklyConsumedSec() > sec {
+		return model.WeeklyUserState{}, fmt.Errorf("weekly allowance cannot be lower than already consumed time")
+	}
+	current.WeeklyAllowanceSec = sec
+	current.AllocationsSec = weekly.DefaultDistribution(sec)
+	current.RecalculateWeeklyRemaining()
+	if current.RemainingSec > 0 {
+		current.Exhausted = false
+		current.DayExhausted = false
+		current.ReenforcementPending = false
+		current.ReenforcementDeadline = time.Time{}
+	}
+	state.WeeklyUsers[key] = current
+	return current, r.Store.Save(state)
+}
+
+func (r *Runtime) ResetWeek(user string, now time.Time) (model.WeeklyUserState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, err := r.Store.LoadOrCreate(now, r.Config.DefaultDailyAllowanceSec)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	key, err := resolveWeeklyUserKey(state, user)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	current := state.WeeklyUsers[key]
+	current.WeekStart = weekly.WeekStart(now).Format("2006-01-02")
+	current.ConsumedSec = [7]int64{}
+	current.RecalculateWeeklyRemaining()
+	current.Exhausted = false
+	current.DayExhausted = false
+	current.StartupWarningSent = false
+	current.HalfwayWarningSent = false
+	current.FiveMinWarningSent = false
+	current.ReenforcementPending = false
+	current.ReenforcementDeadline = time.Time{}
+	current.LastEnforcementReason = ""
+	state.WeeklyUsers[key] = current
+	return current, r.Store.Save(state)
+}
+
 func (r *Runtime) ResetToday(user string) (model.UserDayState, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -477,6 +558,43 @@ func resolveUserKey(state model.StateFile, input string) (string, error) {
 	exactMatches := make([]string, 0, 1)
 	simpleMatches := make([]string, 0, 1)
 	for key, user := range state.Users {
+		username := strings.TrimSpace(user.Username)
+		if strings.EqualFold(username, needle) {
+			exactMatches = append(exactMatches, key)
+			continue
+		}
+		if strings.EqualFold(simpleUsername(username), needle) {
+			simpleMatches = append(simpleMatches, key)
+		}
+	}
+
+	switch {
+	case len(exactMatches) == 1:
+		return exactMatches[0], nil
+	case len(exactMatches) > 1:
+		return "", fmt.Errorf("ambiguous user %q", input)
+	case len(simpleMatches) == 1:
+		return simpleMatches[0], nil
+	case len(simpleMatches) > 1:
+		return "", fmt.Errorf("ambiguous user %q", input)
+	default:
+		return "", fmt.Errorf("user %q not found", input)
+	}
+}
+
+func resolveWeeklyUserKey(state model.StateFile, input string) (string, error) {
+	if _, ok := state.WeeklyUsers[input]; ok {
+		return input, nil
+	}
+
+	needle := strings.TrimSpace(input)
+	if needle == "" {
+		return "", fmt.Errorf("user is required")
+	}
+
+	exactMatches := make([]string, 0, 1)
+	simpleMatches := make([]string, 0, 1)
+	for key, user := range state.WeeklyUsers {
 		username := strings.TrimSpace(user.Username)
 		if strings.EqualFold(username, needle) {
 			exactMatches = append(exactMatches, key)

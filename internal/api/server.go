@@ -21,6 +21,9 @@ type AdminController interface {
 	ResetToday(user string) (model.UserDayState, error)
 	ActiveWeeklyStatus(ctx context.Context, now time.Time) (model.WeeklyUserState, error)
 	UpdateActiveWeeklyDistribution(ctx context.Context, now time.Time, dist [7]int64) (model.WeeklyUserState, error)
+	LookupWeeklyUser(user string, now time.Time) (model.WeeklyUserState, error)
+	SetWeeklyAllowance(user string, sec int64) (model.WeeklyUserState, error)
+	ResetWeek(user string, now time.Time) (model.WeeklyUserState, error)
 	Announce(msg string) error
 	HibernateNow() error
 }
@@ -212,6 +215,53 @@ func (s *Server) routes() {
 				userID,
 				user.RemainingSec,
 				user.DailyAllowanceSec,
+			)
+			s.logRequest(r, http.StatusOK)
+			writeJSON(w, http.StatusOK, user)
+		case r.Method == http.MethodGet && action == "weekly-status":
+			user, err := s.admin.LookupWeeklyUser(userID, time.Now())
+			if err != nil {
+				s.logRequest(r, http.StatusNotFound)
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			s.logRequest(r, http.StatusOK)
+			writeJSON(w, http.StatusOK, user)
+		case r.Method == http.MethodPost && action == "weekly-allowance":
+			var req struct {
+				WeeklyAllowanceSec int64 `json:"weekly_allowance_sec"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				s.logRequest(r, http.StatusBadRequest)
+				http.Error(w, "bad json", http.StatusBadRequest)
+				return
+			}
+			user, err := s.admin.SetWeeklyAllowance(userID, req.WeeklyAllowanceSec)
+			if err != nil {
+				s.logRequest(r, http.StatusBadRequest)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			s.logAdminAction(
+				"admin set user weekly allowance user=%s allowance_sec=%d remaining_sec=%d",
+				userID,
+				user.WeeklyAllowanceSec,
+				user.RemainingSec,
+			)
+			s.logRequest(r, http.StatusOK)
+			writeJSON(w, http.StatusOK, user)
+		case r.Method == http.MethodPost && action == "reset-week":
+			user, err := s.admin.ResetWeek(userID, time.Now())
+			if err != nil {
+				s.logRequest(r, http.StatusBadRequest)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			s.logAdminAction(
+				"admin reset weekly quota user=%s remaining_sec=%d allowance_sec=%d",
+				userID,
+				user.RemainingSec,
+				user.WeeklyAllowanceSec,
 			)
 			s.logRequest(r, http.StatusOK)
 			writeJSON(w, http.StatusOK, user)
@@ -492,6 +542,34 @@ func infoEndpoints() []endpointInfo {
 			Description: "Resets today's consumed time and warning flags for a SID or username.",
 			Example: map[string]any{
 				"request": "curl -X POST -H 'Authorization: Bearer token-123' http://localhost:8111/v1/users/john/reset-today",
+			},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/v1/users/{userId}/weekly-status",
+			Auth:        "bearer",
+			Description: "Returns weekly-flex quota state for a specific user SID or username.",
+			Example: map[string]any{
+				"request": "curl -H 'Authorization: Bearer token-123' http://localhost:8111/v1/users/john/weekly-status",
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/v1/users/{userId}/weekly-allowance",
+			Auth:        "bearer",
+			Description: "Sets the weekly-flex allowance in seconds for a SID or username.",
+			Example: map[string]any{
+				"request": "curl -X POST -H 'Authorization: Bearer token-123' -H 'Content-Type: application/json' http://localhost:8111/v1/users/john/weekly-allowance",
+				"body":    map[string]int64{"weekly_allowance_sec": 25200},
+			},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/v1/users/{userId}/reset-week",
+			Auth:        "bearer",
+			Description: "Resets the current weekly-flex consumed time and warning flags for a SID or username.",
+			Example: map[string]any{
+				"request": "curl -X POST -H 'Authorization: Bearer token-123' http://localhost:8111/v1/users/john/reset-week",
 			},
 		},
 		{

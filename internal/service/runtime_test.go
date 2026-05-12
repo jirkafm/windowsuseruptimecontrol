@@ -205,6 +205,73 @@ func TestUpdateActiveWeeklyDistributionOnlyAffectsActiveUser(t *testing.T) {
 	}
 }
 
+func TestSetWeeklyAllowanceRejectsAllowanceBelowConsumed(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{state: model.StateFile{
+		ServiceDate: "2026-05-12",
+		Users:       map[string]model.UserDayState{},
+		WeeklyUsers: map[string]model.WeeklyUserState{
+			"sid-john": {
+				UserSID:            "sid-john",
+				Username:           "MYPC\\john",
+				WeekStart:          "2026-05-11",
+				WeeklyAllowanceSec: 25200,
+				AllocationsSec:     [7]int64{3600, 3600, 3600, 3600, 3600, 3600, 3600},
+				ConsumedSec:        [7]int64{3600, 3600, 0, 0, 0, 0, 0},
+			},
+		},
+	}}
+	rt := Runtime{Config: model.Config{DefaultWeeklyAllowanceSec: 25200}, Store: store}
+
+	_, err := rt.SetWeeklyAllowance("john", 3600)
+	if err == nil {
+		t.Fatal("expected weekly allowance below consumed time to fail")
+	}
+	if !strings.Contains(err.Error(), "already consumed") {
+		t.Fatalf("error = %v, want already consumed", err)
+	}
+}
+
+func TestResetWeekClearsWeeklyConsumption(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{state: model.StateFile{
+		ServiceDate: "2026-05-12",
+		Users:       map[string]model.UserDayState{},
+		WeeklyUsers: map[string]model.WeeklyUserState{
+			"sid-john": {
+				UserSID:               "sid-john",
+				Username:              "MYPC\\john",
+				WeekStart:             "2026-05-11",
+				WeeklyAllowanceSec:    25200,
+				AllocationsSec:        [7]int64{3600, 3600, 3600, 3600, 3600, 3600, 3600},
+				ConsumedSec:           [7]int64{3600, 900, 0, 0, 0, 0, 0},
+				RemainingSec:          20700,
+				Exhausted:             true,
+				DayExhausted:          true,
+				ReenforcementPending:  true,
+				ReenforcementDeadline: time.Date(2026, 5, 12, 12, 3, 0, 0, time.UTC),
+			},
+		},
+	}}
+	rt := Runtime{Config: model.Config{DefaultWeeklyAllowanceSec: 25200}, Store: store}
+
+	user, err := rt.ResetWeek("john", time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("ResetWeek error: %v", err)
+	}
+	if user.WeeklyConsumedSec() != 0 {
+		t.Fatalf("WeeklyConsumedSec = %d, want 0", user.WeeklyConsumedSec())
+	}
+	if user.Exhausted || user.DayExhausted || user.ReenforcementPending {
+		t.Fatalf("weekly flags not cleared: %#v", user)
+	}
+	if user.RemainingSec != 25200 {
+		t.Fatalf("RemainingSec = %d, want 25200", user.RemainingSec)
+	}
+}
+
 func TestTickLogsUptimeControlStartOnceForActiveUser(t *testing.T) {
 	t.Parallel()
 
@@ -636,16 +703,32 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 
 	rt := Runtime{
 		Config: model.Config{
-			WarningHalfwayEnabled: true,
-			WarningFiveMinEnabled: false,
-			LogMaxSizeMB:          10,
-			LogMaxBackups:         10,
-			LogMaxAgeDays:         365,
-			LogCompress:           true,
+			QuotaMode:                 model.QuotaModeWeeklyFlex,
+			DefaultWeeklyAllowanceSec: 25200,
+			UserUIEnabled:             true,
+			UserUIPort:                8122,
+			WarningHalfwayEnabled:     true,
+			WarningFiveMinEnabled:     false,
+			LogMaxSizeMB:              10,
+			LogMaxBackups:             10,
+			LogMaxAgeDays:             365,
+			LogCompress:               true,
 		},
 	}
 
 	view := rt.ConfigView()
+	if view["quota_mode"] != model.QuotaModeWeeklyFlex {
+		t.Fatalf("quota_mode = %#v, want weekly-flex", view["quota_mode"])
+	}
+	if view["default_weekly_allowance_sec"] != int64(25200) {
+		t.Fatalf("default_weekly_allowance_sec = %#v, want 25200", view["default_weekly_allowance_sec"])
+	}
+	if view["user_ui_enabled"] != true {
+		t.Fatalf("user_ui_enabled = %#v, want true", view["user_ui_enabled"])
+	}
+	if view["user_ui_port"] != 8122 {
+		t.Fatalf("user_ui_port = %#v, want 8122", view["user_ui_port"])
+	}
 	if view["warning_halfway_enabled"] != true {
 		t.Fatalf("warning_halfway_enabled = %#v, want true", view["warning_halfway_enabled"])
 	}
