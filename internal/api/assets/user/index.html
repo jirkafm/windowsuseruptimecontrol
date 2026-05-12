@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weekly time</title>
+  <link rel="stylesheet" href="/user/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>Weekly time</h1>
+        <p id="week-range">Loading current week...</p>
+      </div>
+      <strong id="status-pill" class="pill">Loading</strong>
+    </header>
+    <section class="stats" aria-label="Weekly statistics">
+      <article><span>Used</span><strong id="weekly-used">--</strong></article>
+      <article><span>Remaining</span><strong id="weekly-remaining">--</strong></article>
+      <article><span>Today used</span><strong id="today-used">--</strong></article>
+      <article><span>Today left</span><strong id="today-remaining">--</strong></article>
+    </section>
+    <section class="panel">
+      <h2>Consumption</h2>
+      <div id="weekly-chart" class="chart" aria-label="Allocated and consumed time by day"></div>
+    </section>
+    <section class="panel">
+      <h2>Distribution</h2>
+      <form id="allocation-form"></form>
+      <div class="actions">
+        <p id="form-status" role="status"></p>
+        <button id="save-button" type="button" disabled>Save distribution</button>
+      </div>
+    </section>
+  </main>
+  <script src="/user/app.js"></script>
+</body>
+</html>

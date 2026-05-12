@@ -77,6 +77,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/internal/helper/stream", s.handleHelperStream)
 	s.mux.HandleFunc("/user/api/status", s.handleUserWeeklyStatus)
 	s.mux.HandleFunc("/user/api/distribution", s.handleUserWeeklyDistribution)
+	s.mux.Handle("/user/", http.StripPrefix("/user/", userUIHandler()))
 
 	s.mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		s.logRequest(r, http.StatusOK)
