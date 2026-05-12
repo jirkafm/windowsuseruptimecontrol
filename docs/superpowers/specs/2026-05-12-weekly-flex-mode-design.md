@@ -31,7 +31,7 @@ This design adds a separate weekly flexible mode. It does not replace the curren
 Add config fields:
 
 - `quota_mode`: `daily` or `weekly-flex`. Default is `daily`.
-- `default_weekly_allowance_sec`: default weekly allowance for users first seen in weekly mode.
+- `default_weekly_allowance_sec`: default weekly allowance for users first seen in weekly mode. The default value is 25,200 seconds, which is 7 hours.
 - `user_ui_enabled`: enables the local user web UI. Defaults to true when `quota_mode` is `weekly-flex`, false otherwise.
 - `user_ui_port`: local loopback UI port. If zero, reuse the existing API port only when the API bind address is already loopback; otherwise start a separate loopback server.
 
@@ -51,7 +51,7 @@ Extend persisted state without deleting the daily fields:
 
 On load:
 
-- If weekly mode is active and no weekly state exists for a user, create a default weekly distribution from the weekly allowance.
+- If weekly mode is active and no weekly state exists for a user, create a default weekly distribution from the weekly allowance. When no administrator-provided weekly allowance exists, use the 7-hour default.
 - If the stored week start is not the current Monday, reset weekly consumption and initialize the new week while carrying forward the user's weekly allowance and last saved distribution when valid.
 - If a legacy or corrupted distribution does not sum to the weekly allowance, normalize it into valid 15-minute increments and respect the 50% day cap.
 
