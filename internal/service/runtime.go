@@ -10,6 +10,7 @@ import (
 
 	"windowsuseruptimecontrol/internal/model"
 	"windowsuseruptimecontrol/internal/policy"
+	"windowsuseruptimecontrol/internal/weekly"
 )
 
 type Store interface {
@@ -81,6 +82,13 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 		r.restartReenforcementPending = false
 	}
 
+	if r.Config.QuotaMode == model.QuotaModeWeeklyFlex {
+		return r.tickWeekly(ctx, now, active, state, elapsedSec)
+	}
+	return r.tickDaily(ctx, now, active, state, elapsedSec)
+}
+
+func (r *Runtime) tickDaily(ctx context.Context, now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) error {
 	engine := policy.Engine{
 		DefaultDailyAllowanceSec: r.Config.DefaultDailyAllowanceSec,
 		ReenforcementDelaySec:    r.Config.ReenforcementDelaySec,
@@ -133,9 +141,53 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 		)
 	}
 
+	return r.deliverEvaluation(ctx, afterUser.UserSID, afterUser.Username, afterUser.RemainingSec, result)
+}
+
+func (r *Runtime) tickWeekly(ctx context.Context, now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) error {
+	engine := weekly.Engine{
+		DefaultWeeklyAllowanceSec: r.Config.DefaultWeeklyAllowanceSec,
+		ReenforcementDelaySec:     r.Config.ReenforcementDelaySec,
+		WarningHalfwayEnabled:     r.Config.WarningHalfwayEnabled,
+		WarningFiveMinEnabled:     r.Config.WarningFiveMinEnabled,
+	}
+	beforeUser := state.WeeklyUsers[active.UserSID]
+	result := engine.Evaluate(now, active, state, elapsedSec)
+	afterUser := result.State.WeeklyUsers[active.UserSID]
+
+	if err := r.Store.Save(result.State); err != nil {
+		return err
+	}
+
+	if r.activeTrackingSID != active.UserSID {
+		r.logf(
+			"weekly flex control started for user username=%s sid=%s session=%d allowance_sec=%d remaining_sec=%d",
+			active.Username,
+			active.UserSID,
+			active.SessionID,
+			afterUser.WeeklyAllowanceSec,
+			afterUser.RemainingSec,
+		)
+		r.activeTrackingSID = active.UserSID
+	}
+	if !beforeUser.Exhausted && afterUser.Exhausted {
+		r.logf(
+			"weekly time depleted username=%s sid=%s consumed_sec=%d allowance_sec=%d reason=%q",
+			afterUser.Username,
+			afterUser.UserSID,
+			afterUser.WeeklyConsumedSec(),
+			afterUser.WeeklyAllowanceSec,
+			afterUser.LastEnforcementReason,
+		)
+	}
+
+	return r.deliverEvaluation(ctx, afterUser.UserSID, afterUser.Username, afterUser.RemainingSec, result)
+}
+
+func (r *Runtime) deliverEvaluation(ctx context.Context, userSID, username string, remainingSec int64, result model.Evaluation) error {
 	var notifyErr error
 	speak := func(message string) {
-		if err := r.Helper.Speak(ctx, active.UserSID, message); err != nil {
+		if err := r.Helper.Speak(ctx, userSID, message); err != nil {
 			notifyErr = errors.Join(notifyErr, err)
 		}
 	}
@@ -143,9 +195,9 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 	for _, message := range result.Messages {
 		r.logf(
 			"quota message issued username=%s sid=%s remaining_sec=%d message=%q",
-			afterUser.Username,
-			afterUser.UserSID,
-			afterUser.RemainingSec,
+			username,
+			userSID,
+			remainingSec,
 			message,
 		)
 		speak(message)
@@ -154,16 +206,16 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 		for _, number := range result.Countdown {
 			speak(number)
 		}
-		r.logf("enforcement hibernate requested username=%s sid=%s", afterUser.Username, afterUser.UserSID)
+		r.logf("enforcement hibernate requested username=%s sid=%s", username, userSID)
 		if err := r.Power.Hibernate(ctx); err != nil {
-			r.logf("hibernate failed; attempting shutdown username=%s sid=%s error=%v", afterUser.Username, afterUser.UserSID, err)
+			r.logf("hibernate failed; attempting shutdown username=%s sid=%s error=%v", username, userSID, err)
 			if shutdownErr := r.Power.Shutdown(ctx); shutdownErr != nil {
-				r.logf("shutdown fallback failed username=%s sid=%s error=%v", afterUser.Username, afterUser.UserSID, shutdownErr)
+				r.logf("shutdown fallback failed username=%s sid=%s error=%v", username, userSID, shutdownErr)
 				return errors.Join(notifyErr, err, shutdownErr)
 			}
-			r.logf("shutdown fallback completed username=%s sid=%s", afterUser.Username, afterUser.UserSID)
+			r.logf("shutdown fallback completed username=%s sid=%s", username, userSID)
 		} else {
-			r.logf("hibernate completed username=%s sid=%s", afterUser.Username, afterUser.UserSID)
+			r.logf("hibernate completed username=%s sid=%s", username, userSID)
 		}
 	}
 	return notifyErr
@@ -192,6 +244,53 @@ func restartReenforcementDelay(state model.StateFile, userSID string) model.Stat
 	user.ReenforcementDeadline = time.Time{}
 	state.Users[userSID] = user
 	return state
+}
+
+func (r *Runtime) ActiveWeeklyStatus(ctx context.Context, now time.Time) (model.WeeklyUserState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, err := r.Store.LoadOrCreate(now, r.Config.DefaultDailyAllowanceSec)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	active, ok, err := r.Detector.ActiveUser(ctx)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	if !ok {
+		return model.WeeklyUserState{}, fmt.Errorf("no active console user")
+	}
+	current := weekly.NormalizeUser(now, active, state.WeeklyUsers[active.UserSID], r.Config.DefaultWeeklyAllowanceSec)
+	state.WeeklyUsers[active.UserSID] = current
+	if err := r.Store.Save(state); err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	return current, nil
+}
+
+func (r *Runtime) UpdateActiveWeeklyDistribution(ctx context.Context, now time.Time, dist [7]int64) (model.WeeklyUserState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, err := r.Store.LoadOrCreate(now, r.Config.DefaultDailyAllowanceSec)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	active, ok, err := r.Detector.ActiveUser(ctx)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	if !ok {
+		return model.WeeklyUserState{}, fmt.Errorf("no active console user")
+	}
+	current := weekly.NormalizeUser(now, active, state.WeeklyUsers[active.UserSID], r.Config.DefaultWeeklyAllowanceSec)
+	updated, err := weekly.ApplyDistribution(now, current, dist)
+	if err != nil {
+		return model.WeeklyUserState{}, err
+	}
+	state.WeeklyUsers[active.UserSID] = updated
+	return updated, r.Store.Save(state)
 }
 
 func (r *Runtime) HibernateNow() error {

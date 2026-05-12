@@ -130,6 +130,81 @@ func TestTickConsumesTimeAndSpeaksPolicyMessages(t *testing.T) {
 	}
 }
 
+func TestTickUsesWeeklyFlexMode(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{state: model.StateFile{
+		ServiceDate: "2026-05-12",
+		Users:       map[string]model.UserDayState{},
+		WeeklyUsers: map[string]model.WeeklyUserState{},
+	}}
+	rt := Runtime{
+		Config: model.Config{
+			QuotaMode:                 model.QuotaModeWeeklyFlex,
+			DefaultWeeklyAllowanceSec: 25200,
+			ReenforcementDelaySec:     180,
+		},
+		Store:    store,
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   &fakeHelperBus{},
+		Power:    &fakePower{},
+	}
+
+	if err := rt.Tick(context.Background(), time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC), 1); err != nil {
+		t.Fatalf("Tick error: %v", err)
+	}
+
+	if _, ok := store.state.WeeklyUsers["sid-john"]; !ok {
+		t.Fatal("weekly state missing for active user")
+	}
+	if _, ok := store.state.Users["sid-john"]; ok {
+		t.Fatal("daily state should not be created in weekly-flex mode")
+	}
+}
+
+func TestUpdateActiveWeeklyDistributionOnlyAffectsActiveUser(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{state: model.StateFile{
+		ServiceDate: "2026-05-12",
+		Users:       map[string]model.UserDayState{},
+		WeeklyUsers: map[string]model.WeeklyUserState{
+			"sid-john": {
+				UserSID:            "sid-john",
+				Username:           "John",
+				WeekStart:          "2026-05-11",
+				WeeklyAllowanceSec: 25200,
+				AllocationsSec:     [7]int64{3600, 3600, 3600, 3600, 3600, 3600, 3600},
+			},
+			"sid-jane": {
+				UserSID:            "sid-jane",
+				Username:           "Jane",
+				WeekStart:          "2026-05-11",
+				WeeklyAllowanceSec: 25200,
+				AllocationsSec:     [7]int64{3600, 3600, 3600, 3600, 3600, 3600, 3600},
+			},
+		},
+	}}
+	rt := Runtime{
+		Config:   model.Config{QuotaMode: model.QuotaModeWeeklyFlex, DefaultWeeklyAllowanceSec: 25200},
+		Store:    store,
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+	}
+
+	dist := [7]int64{4500, 4500, 3600, 3600, 3600, 2700, 2700}
+	updated, err := rt.UpdateActiveWeeklyDistribution(context.Background(), time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC), dist)
+	if err != nil {
+		t.Fatalf("UpdateActiveWeeklyDistribution error: %v", err)
+	}
+
+	if updated.UserSID != "sid-john" {
+		t.Fatalf("UserSID = %q, want sid-john", updated.UserSID)
+	}
+	if store.state.WeeklyUsers["sid-jane"].AllocationsSec[0] != 3600 {
+		t.Fatal("inactive user's distribution changed")
+	}
+}
+
 func TestTickLogsUptimeControlStartOnceForActiveUser(t *testing.T) {
 	t.Parallel()
 
