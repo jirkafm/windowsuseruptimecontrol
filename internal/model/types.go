@@ -2,21 +2,32 @@ package model
 
 import "time"
 
+type QuotaMode string
+
+const (
+	QuotaModeDaily      QuotaMode = "daily"
+	QuotaModeWeeklyFlex QuotaMode = "weekly-flex"
+)
+
 type Config struct {
-	APIBindAddress           string `json:"api_bind_address"`
-	APIPort                  int    `json:"api_port"`
-	BearerToken              string `json:"bearer_token"`
-	DefaultDailyAllowanceSec int64  `json:"default_daily_allowance_sec"`
-	ReenforcementDelaySec    int64  `json:"reenforcement_delay_sec"`
-	HelperLaunchCooldownSec  int64  `json:"helper_launch_cooldown_sec"`
-	WarningHalfwayEnabled    bool   `json:"warning_halfway_enabled"`
-	WarningFiveMinEnabled    bool   `json:"warning_five_min_enabled"`
-	HelperPath               string `json:"helper_path"`
-	LogLevel                 string `json:"log_level"`
-	LogMaxSizeMB             int    `json:"log_max_size_mb"`
-	LogMaxBackups            int    `json:"log_max_backups"`
-	LogMaxAgeDays            int    `json:"log_max_age_days"`
-	LogCompress              bool   `json:"log_compress"`
+	APIBindAddress            string    `json:"api_bind_address"`
+	APIPort                   int       `json:"api_port"`
+	BearerToken               string    `json:"bearer_token"`
+	QuotaMode                 QuotaMode `json:"quota_mode"`
+	DefaultDailyAllowanceSec  int64     `json:"default_daily_allowance_sec"`
+	DefaultWeeklyAllowanceSec int64     `json:"default_weekly_allowance_sec"`
+	UserUIEnabled             bool      `json:"user_ui_enabled"`
+	UserUIPort                int       `json:"user_ui_port"`
+	ReenforcementDelaySec     int64     `json:"reenforcement_delay_sec"`
+	HelperLaunchCooldownSec   int64     `json:"helper_launch_cooldown_sec"`
+	WarningHalfwayEnabled     bool      `json:"warning_halfway_enabled"`
+	WarningFiveMinEnabled     bool      `json:"warning_five_min_enabled"`
+	HelperPath                string    `json:"helper_path"`
+	LogLevel                  string    `json:"log_level"`
+	LogMaxSizeMB              int       `json:"log_max_size_mb"`
+	LogMaxBackups             int       `json:"log_max_backups"`
+	LogMaxAgeDays             int       `json:"log_max_age_days"`
+	LogCompress               bool      `json:"log_compress"`
 }
 
 type UserDayState struct {

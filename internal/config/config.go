@@ -30,6 +30,17 @@ func Load(path string) (model.Config, error) {
 	if cfg.BearerToken == "" {
 		return model.Config{}, fmt.Errorf("bearer_token must be set")
 	}
+	switch cfg.QuotaMode {
+	case model.QuotaModeDaily, model.QuotaModeWeeklyFlex:
+	default:
+		return model.Config{}, fmt.Errorf("quota_mode must be %q or %q", model.QuotaModeDaily, model.QuotaModeWeeklyFlex)
+	}
+	if cfg.DefaultWeeklyAllowanceSec <= 0 {
+		return model.Config{}, fmt.Errorf("default_weekly_allowance_sec must be positive")
+	}
+	if cfg.UserUIPort < 0 || cfg.UserUIPort > 65535 {
+		return model.Config{}, fmt.Errorf("user_ui_port must be between 0 and 65535")
+	}
 
 	return cfg, nil
 }
@@ -38,8 +49,17 @@ func applyDefaults(cfg *model.Config) {
 	if cfg.APIBindAddress == "" {
 		cfg.APIBindAddress = "0.0.0.0"
 	}
+	if cfg.QuotaMode == "" {
+		cfg.QuotaMode = model.QuotaModeDaily
+	}
 	if cfg.DefaultDailyAllowanceSec == 0 {
 		cfg.DefaultDailyAllowanceSec = 3600
+	}
+	if cfg.DefaultWeeklyAllowanceSec == 0 {
+		cfg.DefaultWeeklyAllowanceSec = 25200
+	}
+	if cfg.QuotaMode == model.QuotaModeWeeklyFlex {
+		cfg.UserUIEnabled = true
 	}
 	if cfg.ReenforcementDelaySec == 0 {
 		cfg.ReenforcementDelaySec = 180
