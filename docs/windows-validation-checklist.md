@@ -240,7 +240,73 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8111/v1/users/<john-identi
   - no same-day exhausted warning is issued
   - `John` receives a normal startup announcement
 
-## 12. Helper Respawn
+## 12. Weekly Flex Mode
+
+- Reinstall or update the config with weekly-flex enabled:
+
+```powershell
+.\installer\install.ps1 -ApiPort 8111 -BearerToken "replace-with-test-token" -QuotaMode weekly-flex
+```
+
+- Confirm sanitized config reports weekly-flex mode and the 7-hour default:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8111/v1/config" `
+  -Headers @{ Authorization = "Bearer replace-with-test-token" }
+```
+
+- Expected:
+  - `quota_mode` is `weekly-flex`
+  - `default_weekly_allowance_sec` is `25200`
+  - user UI is enabled
+
+- Log in as `John` and open the local user UI:
+
+```powershell
+Start-Process "http://127.0.0.1:8112/user/"
+```
+
+- Expected:
+  - dashboard loads only on loopback
+  - weekly graph shows allocated and consumed time by day
+  - statistics show weekly used, weekly remaining, today used, and today remaining
+  - only `John`'s data is visible
+
+- Try changing sliders.
+- Expected:
+  - sliders move in 15-minute increments
+  - no single day can be saved above 50% of the weekly allowance
+  - a day cannot be lowered below time already consumed that day
+  - total allocation must equal the weekly allowance before save is enabled
+
+- Use the admin API to inspect and change weekly allowance:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8111/v1/users/<john-identifier>/weekly-status" `
+  -Headers @{ Authorization = "Bearer replace-with-test-token" }
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8111/v1/users/<john-identifier>/weekly-allowance" `
+  -Headers @{ Authorization = "Bearer replace-with-test-token" } `
+  -ContentType "application/json" `
+  -Body '{"weekly_allowance_sec":25200}'
+```
+
+- Let `John` exhaust the current day allocation while weekly time remains.
+- Expected:
+  - enforcement occurs for that day
+  - increasing today's allocation through a valid redistribution restores availability
+
+- Let `John` exhaust the full weekly allowance.
+- Expected:
+  - enforcement occurs
+  - redistribution cannot restore availability until the next Monday reset or an admin increases weekly allowance
+
+- After the next Monday reset, log in again.
+- Expected:
+  - weekly consumed time is reset
+  - saved distribution is carried forward when valid
+
+## 13. Helper Respawn
 
 - While `John` is the active user, terminate the helper process:
 
@@ -254,7 +320,7 @@ Stop-Process -Name activityhelper -Force
   - helper process is relaunched
   - later announcements still produce TTS
 
-## 13. Service Stop Permissions
+## 14. Service Stop Permissions
 
 - As a standard non-admin user, try:
 
@@ -277,7 +343,7 @@ Start-Service WindowsUserUptimeControlActivityService
 - Expected:
   - stop and start succeed
 
-## 14. Network Reachability
+## 15. Network Reachability
 
 - From another machine on the same network, call:
 
@@ -298,11 +364,13 @@ Invoke-RestMethod -Uri "http://<target-host>:8111/v1/users" `
 - Expected:
   - management endpoint works remotely
 
-## 15. Pass Criteria
+## 16. Pass Criteria
 
 - Service starts automatically after install and reboot
 - Helper starts for the logged-in user and TTS is audible
 - Per-user quotas are tracked separately
+- Weekly-flex mode exposes user UI only on loopback
+- Weekly-flex users can redistribute but not increase their weekly allowance
 - Only the active console user consumes time
 - Countdown and enforcement execute correctly
 - Same-day reenforcement delay works
