@@ -89,6 +89,56 @@ func (f *fakeAdmin) Announce(msg string) error { return nil }
 
 func (f *fakeAdmin) HibernateNow() error { return nil }
 
+func (f *fakeAdmin) ActiveWeeklyStatus(context.Context, time.Time) (model.WeeklyUserState, error) {
+	return f.state.WeeklyUsers["sid-john"], nil
+}
+
+func (f *fakeAdmin) UpdateActiveWeeklyDistribution(_ context.Context, _ time.Time, dist [7]int64) (model.WeeklyUserState, error) {
+	current := f.state.WeeklyUsers["sid-john"]
+	current.AllocationsSec = dist
+	f.state.WeeklyUsers["sid-john"] = current
+	return current, nil
+}
+
+func TestUserWeeklyStatusDoesNotRequireBearerTokenAndReturnsActiveUserOnly(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{state: model.StateFile{WeeklyUsers: map[string]model.WeeklyUserState{
+		"sid-john": {UserSID: "sid-john", Username: "John", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200},
+		"sid-jane": {UserSID: "sid-jane", Username: "Jane", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200},
+	}}}
+	server := New("token-123", admin, fakeLogger{})
+	req := httptest.NewRequest(http.MethodGet, "/user/api/status", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"user_sid":"sid-john"`) {
+		t.Fatalf("response missing active user: %s", body)
+	}
+	if strings.Contains(body, "sid-jane") {
+		t.Fatalf("response exposed inactive user: %s", body)
+	}
+}
+
+func TestUserWeeklyDistributionRejectsBadJSON(t *testing.T) {
+	t.Parallel()
+
+	server := New("token-123", &fakeAdmin{}, fakeLogger{})
+	req := httptest.NewRequest(http.MethodPost, "/user/api/distribution", strings.NewReader(`{"allocations_sec":[1,2]}`))
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestAdjustEndpointRequiresBearerToken(t *testing.T) {
 	t.Parallel()
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"windowsuseruptimecontrol/internal/helperipc"
 	"windowsuseruptimecontrol/internal/model"
@@ -18,6 +19,8 @@ type AdminController interface {
 	AdjustUser(user string, delta int64) (model.UserDayState, error)
 	SetAllowance(user string, sec int64) (model.UserDayState, error)
 	ResetToday(user string) (model.UserDayState, error)
+	ActiveWeeklyStatus(ctx context.Context, now time.Time) (model.WeeklyUserState, error)
+	UpdateActiveWeeklyDistribution(ctx context.Context, now time.Time, dist [7]int64) (model.WeeklyUserState, error)
 	Announce(msg string) error
 	HibernateNow() error
 }
@@ -72,6 +75,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("/internal/helper/stream", s.handleHelperStream)
+	s.mux.HandleFunc("/user/api/status", s.handleUserWeeklyStatus)
+	s.mux.HandleFunc("/user/api/distribution", s.handleUserWeeklyDistribution)
 
 	s.mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		s.logRequest(r, http.StatusOK)
@@ -287,6 +292,48 @@ func (s *Server) routes() {
 		s.logRequest(r, http.StatusOK)
 		writeJSON(w, http.StatusOK, map[string]any{"lines": lines})
 	})
+}
+
+func (s *Server) handleUserWeeklyStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.logRequest(r, http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user, err := s.admin.ActiveWeeklyStatus(r.Context(), time.Now())
+	if err != nil {
+		s.logRequest(r, http.StatusServiceUnavailable)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	s.logRequest(r, http.StatusOK)
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (s *Server) handleUserWeeklyDistribution(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.logRequest(r, http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		AllocationsSec []int64 `json:"allocations_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.AllocationsSec) != 7 {
+		s.logRequest(r, http.StatusBadRequest)
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	var dist [7]int64
+	copy(dist[:], req.AllocationsSec)
+	user, err := s.admin.UpdateActiveWeeklyDistribution(r.Context(), time.Now(), dist)
+	if err != nil {
+		s.logRequest(r, http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.logRequest(r, http.StatusOK)
+	writeJSON(w, http.StatusOK, user)
 }
 
 func (s *Server) handleHelperStream(w http.ResponseWriter, r *http.Request) {
