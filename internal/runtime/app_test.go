@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"strings"
 	"testing"
 
 	"windowsuseruptimecontrol/internal/model"
@@ -31,6 +32,61 @@ func TestHelperConnectionArgsRequireURLAndToken(t *testing.T) {
 	_, _, _, err := helperConnectionArgs([]string{"activityhelper.exe", "--session-id", "5"})
 	if err == nil {
 		t.Fatal("expected missing helper connection args to fail")
+	}
+}
+
+func TestUserUIAddrBindsLoopbackOnConfiguredPort(t *testing.T) {
+	t.Parallel()
+
+	got := userUIAddr(model.Config{APIBindAddress: "0.0.0.0", APIPort: 8111, UserUIPort: 8122})
+	if got != "127.0.0.1:8122" {
+		t.Fatalf("userUIAddr = %q, want 127.0.0.1:8122", got)
+	}
+}
+
+func TestUserUIAddrReusesAPIPortOnlyForLoopbackAPI(t *testing.T) {
+	t.Parallel()
+
+	got := userUIAddr(model.Config{APIBindAddress: "127.0.0.1", APIPort: 8111})
+	if got != "127.0.0.1:8111" {
+		t.Fatalf("userUIAddr = %q, want 127.0.0.1:8111", got)
+	}
+}
+
+func TestUserUIAddrChoosesDefaultWhenAPIIsWildcardAndPortUnset(t *testing.T) {
+	t.Parallel()
+
+	got := userUIAddr(model.Config{APIBindAddress: "0.0.0.0", APIPort: 8111})
+	if got != "127.0.0.1:8112" {
+		t.Fatalf("userUIAddr = %q, want 127.0.0.1:8112", got)
+	}
+}
+
+func TestApplyServiceStartupArgsEnablesWeeklyFlexMode(t *testing.T) {
+	t.Parallel()
+
+	cfg := model.Config{QuotaMode: model.QuotaModeDaily, UserUIEnabled: false}
+	got, err := applyServiceStartupArgs(cfg, []string{"activitysvc.exe", "--quota-mode", "weekly-flex"})
+	if err != nil {
+		t.Fatalf("applyServiceStartupArgs error: %v", err)
+	}
+	if got.QuotaMode != model.QuotaModeWeeklyFlex {
+		t.Fatalf("QuotaMode = %q, want weekly-flex", got.QuotaMode)
+	}
+	if !got.UserUIEnabled {
+		t.Fatal("UserUIEnabled = false, want true when weekly-flex is enabled by startup args")
+	}
+}
+
+func TestApplyServiceStartupArgsRejectsUnknownQuotaMode(t *testing.T) {
+	t.Parallel()
+
+	_, err := applyServiceStartupArgs(model.Config{}, []string{"activitysvc.exe", "--quota-mode", "monthly"})
+	if err == nil {
+		t.Fatal("expected invalid quota mode to fail")
+	}
+	if !strings.Contains(err.Error(), "quota-mode") {
+		t.Fatalf("error = %v, want quota-mode validation", err)
 	}
 }
 

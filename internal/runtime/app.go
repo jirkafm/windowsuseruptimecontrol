@@ -34,6 +34,10 @@ func ServiceMain(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	cfg, err = applyServiceStartupArgs(cfg, os.Args)
+	if err != nil {
+		return err
+	}
 
 	logger := logging.NewWithRotation(
 		filepath.Join(baseDir, "logs", "service.log"),
@@ -67,6 +71,13 @@ func ServiceMain(ctx context.Context) error {
 		Addr:    fmt.Sprintf("%s:%d", cfg.APIBindAddress, cfg.APIPort),
 		Handler: server,
 	}
+	var userUIServer *http.Server
+	if cfg.UserUIEnabled && cfg.QuotaMode == model.QuotaModeWeeklyFlex && !isLoopbackBind(cfg.APIBindAddress) {
+		userUIServer = &http.Server{
+			Addr:    userUIAddr(cfg),
+			Handler: server,
+		}
+	}
 
 	logger.Servicef("service starting on %s", httpServer.Addr)
 	go func() {
@@ -74,6 +85,14 @@ func ServiceMain(ctx context.Context) error {
 			logger.Servicef("api server error: %v", err)
 		}
 	}()
+	if userUIServer != nil {
+		logger.Servicef("user ui starting on %s", userUIServer.Addr)
+		go func() {
+			if err := userUIServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Servicef("user ui server error: %v", err)
+			}
+		}()
+	}
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -91,6 +110,9 @@ func ServiceMain(ctx context.Context) error {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_ = httpServer.Shutdown(shutdownCtx)
+			if userUIServer != nil {
+				_ = userUIServer.Shutdown(shutdownCtx)
+			}
 			logger.Servicef("service stopping")
 			return nil
 		case now := <-ticker.C:
@@ -185,6 +207,40 @@ func helperStreamURL(cfg model.Config) string {
 		host = "127.0.0.1"
 	}
 	return "http://" + net.JoinHostPort(host, strconv.Itoa(cfg.APIPort)) + "/internal/helper/stream"
+}
+
+func userUIAddr(cfg model.Config) string {
+	port := cfg.UserUIPort
+	if port == 0 && isLoopbackBind(cfg.APIBindAddress) {
+		port = cfg.APIPort
+	}
+	if port == 0 {
+		port = cfg.APIPort + 1
+	}
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+}
+
+func isLoopbackBind(host string) bool {
+	return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]"
+}
+
+func applyServiceStartupArgs(cfg model.Config, args []string) (model.Config, error) {
+	for idx := 0; idx < len(args)-1; idx++ {
+		switch args[idx] {
+		case "--quota-mode":
+			mode := model.QuotaMode(args[idx+1])
+			switch mode {
+			case model.QuotaModeDaily:
+				cfg.QuotaMode = model.QuotaModeDaily
+			case model.QuotaModeWeeklyFlex:
+				cfg.QuotaMode = model.QuotaModeWeeklyFlex
+				cfg.UserUIEnabled = true
+			default:
+				return model.Config{}, fmt.Errorf("quota-mode must be %q or %q", model.QuotaModeDaily, model.QuotaModeWeeklyFlex)
+			}
+		}
+	}
+	return cfg, nil
 }
 
 func newHelperToken() (string, error) {
