@@ -41,7 +41,7 @@ func (l *Launcher) EnsureRunning(ctx context.Context, sessionID uint32, userSID 
 	defer primary.Close()
 
 	dir := filepath.Dir(l.HelperPath)
-	commandLine := buildCommandLine(l.HelperPath, sessionID, l.HelperURL, l.HelperToken)
+	commandLine := buildCommandLine(l.HelperPath, sessionID, l.HelperURL, l.HelperToken, l.SpeechCulture)
 	commandLinePtr, err := windows.UTF16PtrFromString(commandLine)
 	if err != nil {
 		return err

@@ -4,6 +4,8 @@ param(
     [string]$BearerToken = "change-me",
     [ValidateSet("daily","weekly-flex")]
     [string]$QuotaMode = "daily",
+    [ValidateSet("en","cs","en-US","cs-CZ")]
+    [string]$Language = "en",
     [int]$DefaultWeeklyAllowanceSec = 25200,
     [int]$UserUiPort = 0,
     [bool]$UserUiEnabled = $false
@@ -36,6 +38,7 @@ icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-N
     api_port = $ApiPort
     bearer_token = $BearerToken
     quota_mode = $QuotaMode
+    language = $Language
     default_daily_allowance_sec = 3600
     default_weekly_allowance_sec = $DefaultWeeklyAllowanceSec
     user_ui_enabled = ($UserUiEnabled -or $QuotaMode -eq "weekly-flex")

@@ -26,3 +26,23 @@ func TestUserUIServesDashboardShell(t *testing.T) {
 		}
 	}
 }
+
+func TestUserUIAssetsExposeEnglishAndCzechTranslations(t *testing.T) {
+	t.Parallel()
+
+	data, err := userUIAssets.ReadFile("assets/user/app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+	script := string(data)
+	for _, want := range []string{
+		`en: {`,
+		`cs: {`,
+		`"Weekly time"`,
+		`"Týdenní čas"`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("app.js missing %q", want)
+		}
+	}
+}

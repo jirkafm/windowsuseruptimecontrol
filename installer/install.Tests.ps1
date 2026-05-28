@@ -18,6 +18,9 @@ Describe "install.ps1" {
         $script | Should -Not -Match "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
         $script | Should -Match '\[ValidateSet\("daily","weekly-flex"\)\]'
         $script | Should -Match '\$QuotaMode = "daily"'
+        $script | Should -Match '\[ValidateSet\("en","cs","en-US","cs-CZ"\)\]'
+        $script | Should -Match '\$Language = "en"'
+        $script | Should -Match 'language = \$Language'
         $script | Should -Match 'default_weekly_allowance_sec = \$DefaultWeeklyAllowanceSec'
         $script | Should -Match 'user_ui_port = \$UserUiPort'
     }

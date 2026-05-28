@@ -125,3 +125,37 @@ func TestEvaluateExhaustsWholeWeek(t *testing.T) {
 		t.Fatalf("LastEnforcementReason = %q, want weekly allowance exhausted", user.LastEnforcementReason)
 	}
 }
+
+func TestEvaluateEmitsCzechWeeklyWarnings(t *testing.T) {
+	t.Parallel()
+
+	engine := Engine{
+		Language:                  "cs",
+		DefaultWeeklyAllowanceSec: 25200,
+		ReenforcementDelaySec:     180,
+	}
+	state := model.StateFile{
+		ServiceDate: "2026-05-12",
+		Users:       map[string]model.UserDayState{},
+		WeeklyUsers: map[string]model.WeeklyUserState{
+			"sid-john": {
+				UserSID:            "sid-john",
+				Username:           "John",
+				WeekStart:          "2026-05-11",
+				WeeklyAllowanceSec: 25200,
+				AllocationsSec:     [7]int64{3600, 3600, 3600, 3600, 3600, 3600, 3600},
+			},
+		},
+	}
+
+	result := engine.Evaluate(
+		time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC),
+		model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"},
+		state,
+		60,
+	)
+
+	if len(result.Messages) != 1 || result.Messages[0] != "Tento týden ti zbývá 419 minut." {
+		t.Fatalf("Messages = %#v, want Czech weekly startup announcement", result.Messages)
+	}
+}

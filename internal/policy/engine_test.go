@@ -175,3 +175,40 @@ func TestEvaluateTriggersEnforcementCountdown(t *testing.T) {
 		t.Fatalf("Countdown = %#v, want 10..1", result.Countdown)
 	}
 }
+
+func TestEvaluateEmitsCzechWarnings(t *testing.T) {
+	t.Parallel()
+
+	engine := Engine{
+		Language:                 "cs",
+		DefaultDailyAllowanceSec: 3600,
+		ReenforcementDelaySec:    180,
+		WarningHalfwayEnabled:    true,
+		WarningFiveMinEnabled:    true,
+	}
+	state := model.StateFile{
+		ServiceDate: "2026-04-01",
+		Users: map[string]model.UserDayState{
+			"sid-john": {
+				UserSID:            "sid-john",
+				Username:           "John",
+				Date:               "2026-04-01",
+				DailyAllowanceSec:  3600,
+				ConsumedSec:        0,
+				RemainingSec:       3600,
+				StartupWarningSent: false,
+			},
+		},
+	}
+
+	result := engine.Evaluate(
+		time.Date(2026, 4, 1, 10, 0, 10, 0, time.UTC),
+		model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"},
+		state,
+		60,
+	)
+
+	if len(result.Messages) != 1 || result.Messages[0] != "Zbývá ti 59 minut." {
+		t.Fatalf("Messages = %#v, want Czech startup announcement", result.Messages)
+	}
+}

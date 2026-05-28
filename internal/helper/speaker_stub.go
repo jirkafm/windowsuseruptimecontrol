@@ -2,6 +2,8 @@
 
 package helper
 
-type WindowsSpeaker struct{}
+type WindowsSpeaker struct {
+	Culture string
+}
 
 func (WindowsSpeaker) Speak(string) error { return nil }

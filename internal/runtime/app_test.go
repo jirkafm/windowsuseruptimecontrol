@@ -29,7 +29,7 @@ func TestHelperStreamURLUsesLoopbackForWildcardBind(t *testing.T) {
 func TestHelperConnectionArgsRequireURLAndToken(t *testing.T) {
 	t.Parallel()
 
-	_, _, _, err := helperConnectionArgs([]string{"activityhelper.exe", "--session-id", "5"})
+	_, _, _, _, err := helperConnectionArgs([]string{"activityhelper.exe", "--session-id", "5"})
 	if err == nil {
 		t.Fatal("expected missing helper connection args to fail")
 	}
@@ -93,17 +93,21 @@ func TestApplyServiceStartupArgsRejectsUnknownQuotaMode(t *testing.T) {
 func TestHelperConnectionArgsParsesURLTokenAndSession(t *testing.T) {
 	t.Parallel()
 
-	streamURL, token, sessionID, err := helperConnectionArgs([]string{
+	streamURL, token, sessionID, speechCulture, err := helperConnectionArgs([]string{
 		"activityhelper.exe",
 		"--helper-url", "http://127.0.0.1:8111/internal/helper/stream",
 		"--helper-token", "token-123",
 		"--session-id", "5",
+		"--speech-culture", "cs-CZ",
 	})
 	if err != nil {
 		t.Fatalf("helperConnectionArgs error: %v", err)
 	}
 	if streamURL != "http://127.0.0.1:8111/internal/helper/stream" || token != "token-123" || sessionID != 5 {
 		t.Fatalf("args = url %q token %q session %d", streamURL, token, sessionID)
+	}
+	if speechCulture != "cs-CZ" {
+		t.Fatalf("speechCulture = %q, want cs-CZ", speechCulture)
 	}
 }
 

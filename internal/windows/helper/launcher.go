@@ -11,6 +11,7 @@ type Launcher struct {
 	HelperPath     string
 	HelperURL      string
 	HelperToken    string
+	SpeechCulture  string
 	LaunchCooldown time.Duration
 
 	mu           sync.Mutex
@@ -70,13 +71,14 @@ func defaultLaunchSettings() launchSettings {
 	}
 }
 
-func buildCommandLine(helperPath string, sessionID uint32, helperURL, helperToken string) string {
+func buildCommandLine(helperPath string, sessionID uint32, helperURL, helperToken, speechCulture string) string {
 	return fmt.Sprintf(
-		"%s --session-id %d --helper-url %s --helper-token %s",
+		"%s --session-id %d --helper-url %s --helper-token %s --speech-culture %s",
 		quoteArg(helperPath),
 		sessionID,
 		quoteArg(helperURL),
 		quoteArg(helperToken),
+		quoteArg(speechCulture),
 	)
 }
 
