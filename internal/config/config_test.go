@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"windowsuseruptimecontrol/internal/model"
 )
 
 func TestLoadConfigDefaults(t *testing.T) {
@@ -53,6 +56,77 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.BearerToken != "secret-token" {
 		t.Fatalf("BearerToken = %q, want secret-token", cfg.BearerToken)
+	}
+}
+
+func TestLoadConfigDefaultsWeeklyFlexFields(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{"api_port":8088,"bearer_token":"secret-token"}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.QuotaMode != model.QuotaModeDaily {
+		t.Fatalf("QuotaMode = %q, want %q", cfg.QuotaMode, model.QuotaModeDaily)
+	}
+	if cfg.DefaultWeeklyAllowanceSec != 25200 {
+		t.Fatalf("DefaultWeeklyAllowanceSec = %d, want 25200", cfg.DefaultWeeklyAllowanceSec)
+	}
+	if cfg.UserUIEnabled {
+		t.Fatalf("UserUIEnabled = true, want false for daily mode")
+	}
+	if cfg.UserUIPort != 0 {
+		t.Fatalf("UserUIPort = %d, want 0", cfg.UserUIPort)
+	}
+}
+
+func TestLoadConfigEnablesUserUIByDefaultForWeeklyFlex(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{"api_port":8088,"bearer_token":"secret-token","quota_mode":"weekly-flex"}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.QuotaMode != model.QuotaModeWeeklyFlex {
+		t.Fatalf("QuotaMode = %q, want weekly-flex", cfg.QuotaMode)
+	}
+	if !cfg.UserUIEnabled {
+		t.Fatalf("UserUIEnabled = false, want true for weekly-flex")
+	}
+}
+
+func TestLoadConfigRejectsUnknownQuotaMode(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{"api_port":8088,"bearer_token":"secret-token","quota_mode":"monthly"}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected unknown quota mode to fail")
+	}
+	if !strings.Contains(err.Error(), "quota_mode") {
+		t.Fatalf("error = %v, want quota_mode validation", err)
 	}
 }
 

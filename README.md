@@ -76,6 +76,9 @@ The installer writes `C:\ProgramData\Activity\config\config.json` with defaults 
 
 Manual validation steps for installation, ACLs, helper relaunch, API auth, user quota behavior, and enforcement flow are documented in [docs/windows-validation-checklist.md](docs/windows-validation-checklist.md).
 
+## Weekly Flex Mode
+Daily mode remains the default. To enable weekly-flex mode, install with `-QuotaMode weekly-flex`. The default weekly allowance is 7 hours (`25200` seconds). Administrators control the total allowance. The logged-in user can open the local user UI on `127.0.0.1` and redistribute that allowance across Monday-Sunday in 15-minute increments. No day can receive more than 50% of the weekly allowance.
+
 ## Project Layout
 - `cmd/activitysvc` — service entrypoint that starts the Windows service runner and main runtime loop.
 - `cmd/activityhelper` — helper entrypoint that connects to the service's private helper stream and speaks received commands.

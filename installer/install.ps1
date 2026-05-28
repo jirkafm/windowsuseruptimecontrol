@@ -1,7 +1,12 @@
 param(
     [string]$InstallRoot = "C:\ProgramData\Activity",
     [int]$ApiPort = 8111,
-    [string]$BearerToken = "change-me"
+    [string]$BearerToken = "change-me",
+    [ValidateSet("daily","weekly-flex")]
+    [string]$QuotaMode = "daily",
+    [int]$DefaultWeeklyAllowanceSec = 25200,
+    [int]$UserUiPort = 0,
+    [bool]$UserUiEnabled = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +35,11 @@ icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-N
     api_bind_address = "0.0.0.0"
     api_port = $ApiPort
     bearer_token = $BearerToken
+    quota_mode = $QuotaMode
     default_daily_allowance_sec = 3600
+    default_weekly_allowance_sec = $DefaultWeeklyAllowanceSec
+    user_ui_enabled = ($UserUiEnabled -or $QuotaMode -eq "weekly-flex")
+    user_ui_port = $UserUiPort
     reenforcement_delay_sec = 180
     helper_launch_cooldown_sec = 5
     warning_halfway_enabled = $true

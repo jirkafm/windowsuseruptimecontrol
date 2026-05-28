@@ -16,5 +16,9 @@ Describe "install.ps1" {
         $script | Should -Match ";;;SY"
         $script | Should -Match ";;;BA"
         $script | Should -Not -Match "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        $script | Should -Match '\[ValidateSet\("daily","weekly-flex"\)\]'
+        $script | Should -Match '\$QuotaMode = "daily"'
+        $script | Should -Match 'default_weekly_allowance_sec = \$DefaultWeeklyAllowanceSec'
+        $script | Should -Match 'user_ui_port = \$UserUiPort'
     }
 }

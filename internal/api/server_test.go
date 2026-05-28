@@ -89,6 +89,147 @@ func (f *fakeAdmin) Announce(msg string) error { return nil }
 
 func (f *fakeAdmin) HibernateNow() error { return nil }
 
+func (f *fakeAdmin) ActiveWeeklyStatus(context.Context, time.Time) (model.WeeklyUserState, error) {
+	return f.state.WeeklyUsers["sid-john"], nil
+}
+
+func (f *fakeAdmin) UpdateActiveWeeklyDistribution(_ context.Context, _ time.Time, dist [7]int64) (model.WeeklyUserState, error) {
+	current := f.state.WeeklyUsers["sid-john"]
+	current.AllocationsSec = dist
+	f.state.WeeklyUsers["sid-john"] = current
+	return current, nil
+}
+
+func (f *fakeAdmin) LookupWeeklyUser(user string, now time.Time) (model.WeeklyUserState, error) {
+	got, ok := f.state.WeeklyUsers[user]
+	if !ok {
+		return model.WeeklyUserState{}, errors.New("not found")
+	}
+	return got, nil
+}
+
+func (f *fakeAdmin) SetWeeklyAllowance(user string, sec int64) (model.WeeklyUserState, error) {
+	current := f.state.WeeklyUsers[user]
+	current.WeeklyAllowanceSec = sec
+	current.AllocationsSec = [7]int64{3600, 3600, 3600, 3600, 3600, 3600, 3600}
+	current.RecalculateWeeklyRemaining()
+	f.state.WeeklyUsers[user] = current
+	return current, nil
+}
+
+func (f *fakeAdmin) ResetWeek(user string, now time.Time) (model.WeeklyUserState, error) {
+	current := f.state.WeeklyUsers[user]
+	current.ConsumedSec = [7]int64{}
+	current.Exhausted = false
+	current.DayExhausted = false
+	current.RecalculateWeeklyRemaining()
+	f.state.WeeklyUsers[user] = current
+	return current, nil
+}
+
+func TestWeeklyStatusEndpointReturnsUserWeeklyState(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{state: model.StateFile{WeeklyUsers: map[string]model.WeeklyUserState{
+		"sid-john": {UserSID: "sid-john", Username: "John", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200},
+	}}}
+	server := New("token-123", admin, fakeLogger{})
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/sid-john/weekly-status", nil)
+	req.Header.Set("Authorization", "Bearer token-123")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"weekly_allowance_sec":25200`) {
+		t.Fatalf("body = %s, want weekly allowance", rec.Body.String())
+	}
+}
+
+func TestWeeklyAllowanceEndpointUpdatesUserWeeklyAllowance(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{state: model.StateFile{WeeklyUsers: map[string]model.WeeklyUserState{
+		"sid-john": {UserSID: "sid-john", Username: "John", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200},
+	}}}
+	server := New("token-123", admin, fakeLogger{})
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/sid-john/weekly-allowance", strings.NewReader(`{"weekly_allowance_sec":28800}`))
+	req.Header.Set("Authorization", "Bearer token-123")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if admin.state.WeeklyUsers["sid-john"].WeeklyAllowanceSec != 28800 {
+		t.Fatalf("WeeklyAllowanceSec = %d, want 28800", admin.state.WeeklyUsers["sid-john"].WeeklyAllowanceSec)
+	}
+}
+
+func TestResetWeekEndpointClearsWeeklyConsumption(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{state: model.StateFile{WeeklyUsers: map[string]model.WeeklyUserState{
+		"sid-john": {UserSID: "sid-john", Username: "John", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200, ConsumedSec: [7]int64{900, 0, 0, 0, 0, 0, 0}},
+	}}}
+	server := New("token-123", admin, fakeLogger{})
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/sid-john/reset-week", nil)
+	req.Header.Set("Authorization", "Bearer token-123")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	updated := admin.state.WeeklyUsers["sid-john"]
+	if updated.WeeklyConsumedSec() != 0 {
+		t.Fatalf("WeeklyConsumedSec = %d, want 0", updated.WeeklyConsumedSec())
+	}
+}
+
+func TestUserWeeklyStatusDoesNotRequireBearerTokenAndReturnsActiveUserOnly(t *testing.T) {
+	t.Parallel()
+
+	admin := &fakeAdmin{state: model.StateFile{WeeklyUsers: map[string]model.WeeklyUserState{
+		"sid-john": {UserSID: "sid-john", Username: "John", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200},
+		"sid-jane": {UserSID: "sid-jane", Username: "Jane", WeekStart: "2026-05-11", WeeklyAllowanceSec: 25200},
+	}}}
+	server := New("token-123", admin, fakeLogger{})
+	req := httptest.NewRequest(http.MethodGet, "/user/api/status", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"user_sid":"sid-john"`) {
+		t.Fatalf("response missing active user: %s", body)
+	}
+	if strings.Contains(body, "sid-jane") {
+		t.Fatalf("response exposed inactive user: %s", body)
+	}
+}
+
+func TestUserWeeklyDistributionRejectsBadJSON(t *testing.T) {
+	t.Parallel()
+
+	server := New("token-123", &fakeAdmin{}, fakeLogger{})
+	req := httptest.NewRequest(http.MethodPost, "/user/api/distribution", strings.NewReader(`{"allocations_sec":[1,2]}`))
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestAdjustEndpointRequiresBearerToken(t *testing.T) {
 	t.Parallel()
 
@@ -219,6 +360,9 @@ func TestInfoEndpointListsKeyEndpointsAndExamples(t *testing.T) {
 		`"path":"/v1/config"`,
 		`"path":"/v1/announce"`,
 		`"path":"/v1/users/{userId}/adjust"`,
+		`"path":"/v1/users/{userId}/weekly-status"`,
+		`"path":"/v1/users/{userId}/weekly-allowance"`,
+		`"path":"/v1/users/{userId}/reset-week"`,
 		`Authorization: Bearer token-123`,
 		`"delta_sec":300`,
 		`"message":"WindowsUserUptimeControl test announcement"`,
