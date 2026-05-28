@@ -57,6 +57,29 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.BearerToken != "secret-token" {
 		t.Fatalf("BearerToken = %q, want secret-token", cfg.BearerToken)
 	}
+	if cfg.Language != "en" {
+		t.Fatalf("Language = %q, want en", cfg.Language)
+	}
+}
+
+func TestLoadConfigHonorsCzechLanguage(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{"api_port":8088,"bearer_token":"secret-token","language":"cs-CZ"}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.Language != "cs" {
+		t.Fatalf("Language = %q, want cs", cfg.Language)
+	}
 }
 
 func TestLoadConfigDefaultsWeeklyFlexFields(t *testing.T) {

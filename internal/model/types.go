@@ -14,6 +14,7 @@ type Config struct {
 	APIPort                   int       `json:"api_port"`
 	BearerToken               string    `json:"bearer_token"`
 	QuotaMode                 QuotaMode `json:"quota_mode"`
+	Language                  string    `json:"language"`
 	DefaultDailyAllowanceSec  int64     `json:"default_daily_allowance_sec"`
 	DefaultWeeklyAllowanceSec int64     `json:"default_weekly_allowance_sec"`
 	UserUIEnabled             bool      `json:"user_ui_enabled"`

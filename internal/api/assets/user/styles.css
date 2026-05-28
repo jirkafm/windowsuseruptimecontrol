@@ -37,6 +37,29 @@ body {
   margin-bottom: 18px;
 }
 
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.language-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+select {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
 h1,
 h2,
 p {
@@ -200,6 +223,7 @@ button:disabled {
 
 @media (max-width: 760px) {
   .topbar,
+  .top-actions,
   .actions {
     align-items: stretch;
     flex-direction: column;

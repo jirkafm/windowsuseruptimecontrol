@@ -10,23 +10,32 @@
   <main class="shell">
     <header class="topbar">
       <div>
-        <h1>Weekly time</h1>
+        <h1 id="page-title">Weekly time</h1>
         <p id="week-range">Loading current week...</p>
       </div>
-      <strong id="status-pill" class="pill">Loading</strong>
+      <div class="top-actions">
+        <label class="language-picker">
+          <span id="language-label">Language</span>
+          <select id="language-select" aria-label="Language">
+            <option value="en">English</option>
+            <option value="cs">Čeština</option>
+          </select>
+        </label>
+        <strong id="status-pill" class="pill">Loading</strong>
+      </div>
     </header>
-    <section class="stats" aria-label="Weekly statistics">
-      <article><span>Used</span><strong id="weekly-used">--</strong></article>
-      <article><span>Remaining</span><strong id="weekly-remaining">--</strong></article>
-      <article><span>Today used</span><strong id="today-used">--</strong></article>
-      <article><span>Today left</span><strong id="today-remaining">--</strong></article>
+    <section id="stats" class="stats" aria-label="Weekly statistics">
+      <article><span id="stat-used-label">Used</span><strong id="weekly-used">--</strong></article>
+      <article><span id="stat-remaining-label">Remaining</span><strong id="weekly-remaining">--</strong></article>
+      <article><span id="stat-today-used-label">Today used</span><strong id="today-used">--</strong></article>
+      <article><span id="stat-today-left-label">Today left</span><strong id="today-remaining">--</strong></article>
     </section>
     <section class="panel">
-      <h2>Consumption</h2>
+      <h2 id="consumption-title">Consumption</h2>
       <div id="weekly-chart" class="chart" aria-label="Allocated and consumed time by day"></div>
     </section>
     <section class="panel">
-      <h2>Distribution</h2>
+      <h2 id="distribution-title">Distribution</h2>
       <form id="allocation-form"></form>
       <div class="actions">
         <p id="form-status" role="status"></p>

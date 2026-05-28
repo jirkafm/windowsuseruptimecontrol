@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"windowsuseruptimecontrol/internal/i18n"
 	"windowsuseruptimecontrol/internal/model"
 )
 
@@ -23,6 +24,7 @@ func Load(path string) (model.Config, error) {
 		return model.Config{}, fmt.Errorf("decode config: %w", err)
 	}
 
+	cfg.Language = i18n.NormalizeLanguage(cfg.Language)
 	applyDefaults(&cfg)
 	if cfg.APIPort == 0 {
 		return model.Config{}, fmt.Errorf("api_port must be set")
@@ -51,6 +53,9 @@ func applyDefaults(cfg *model.Config) {
 	}
 	if cfg.QuotaMode == "" {
 		cfg.QuotaMode = model.QuotaModeDaily
+	}
+	if cfg.Language == "" {
+		cfg.Language = i18n.English
 	}
 	if cfg.DefaultDailyAllowanceSec == 0 {
 		cfg.DefaultDailyAllowanceSec = 3600

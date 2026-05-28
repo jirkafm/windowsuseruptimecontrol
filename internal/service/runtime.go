@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"windowsuseruptimecontrol/internal/i18n"
 	"windowsuseruptimecontrol/internal/model"
 	"windowsuseruptimecontrol/internal/policy"
 	"windowsuseruptimecontrol/internal/weekly"
@@ -90,6 +91,7 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 
 func (r *Runtime) tickDaily(ctx context.Context, now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) error {
 	engine := policy.Engine{
+		Language:                 r.Config.Language,
 		DefaultDailyAllowanceSec: r.Config.DefaultDailyAllowanceSec,
 		ReenforcementDelaySec:    r.Config.ReenforcementDelaySec,
 		WarningHalfwayEnabled:    r.Config.WarningHalfwayEnabled,
@@ -146,6 +148,7 @@ func (r *Runtime) tickDaily(ctx context.Context, now time.Time, active model.Act
 
 func (r *Runtime) tickWeekly(ctx context.Context, now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) error {
 	engine := weekly.Engine{
+		Language:                  r.Config.Language,
 		DefaultWeeklyAllowanceSec: r.Config.DefaultWeeklyAllowanceSec,
 		ReenforcementDelaySec:     r.Config.ReenforcementDelaySec,
 		WarningHalfwayEnabled:     r.Config.WarningHalfwayEnabled,
@@ -320,6 +323,7 @@ func (r *Runtime) ConfigView() map[string]any {
 		"api_bind_address":             r.Config.APIBindAddress,
 		"api_port":                     r.Config.APIPort,
 		"quota_mode":                   r.Config.QuotaMode,
+		"language":                     r.Config.Language,
 		"default_daily_allowance_sec":  r.Config.DefaultDailyAllowanceSec,
 		"default_weekly_allowance_sec": r.Config.DefaultWeeklyAllowanceSec,
 		"user_ui_enabled":              r.Config.UserUIEnabled,
@@ -539,10 +543,7 @@ func (r *Runtime) announceAllowanceChanged(ctx context.Context, userKey string, 
 	if !strings.EqualFold(active.UserSID, user.UserSID) && !strings.EqualFold(active.UserSID, userKey) {
 		return
 	}
-	_ = r.Helper.Speak(ctx, active.UserSID, fmt.Sprintf(
-		"Your remaining time has changed. You have %d minutes remaining.",
-		user.RemainingSec/60,
-	))
+	_ = r.Helper.Speak(ctx, active.UserSID, i18n.AllowanceChanged(r.Config.Language, user.RemainingSec/60))
 }
 
 func resolveUserKey(state model.StateFile, input string) (string, error) {

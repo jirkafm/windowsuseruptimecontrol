@@ -1,13 +1,14 @@
 package policy
 
 import (
-	"fmt"
 	"time"
 
+	"windowsuseruptimecontrol/internal/i18n"
 	"windowsuseruptimecontrol/internal/model"
 )
 
 type Engine struct {
+	Language                 string
 	DefaultDailyAllowanceSec int64
 	ReenforcementDelaySec    int64
 	WarningHalfwayEnabled    bool
@@ -41,7 +42,7 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 		if !user.ReenforcementPending {
 			user.ReenforcementPending = true
 			user.ReenforcementDeadline = now.Add(time.Duration(e.ReenforcementDelaySec) * time.Second)
-			result.Messages = append(result.Messages, fmt.Sprintf("No time remains for today. The computer will hibernate in %d seconds.", e.ReenforcementDelaySec))
+			result.Messages = append(result.Messages, i18n.DailyNoTime(e.Language, e.ReenforcementDelaySec))
 		} else if !user.ReenforcementDeadline.After(now) {
 			result.TriggerEnforcement = true
 			result.Countdown = countdown()
@@ -56,15 +57,15 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 
 	halfwayThreshold := user.DailyAllowanceSec / 2
 	if !user.StartupWarningSent {
-		result.Messages = append(result.Messages, fmt.Sprintf("You have %d minutes remaining.", user.RemainingSec/60))
+		result.Messages = append(result.Messages, i18n.DailyRemaining(e.Language, user.RemainingSec/60))
 		user.StartupWarningSent = true
 	}
 	if e.WarningHalfwayEnabled && !user.HalfwayWarningSent && user.ConsumedSec >= halfwayThreshold {
-		result.Messages = append(result.Messages, "You have 30 minutes remaining.")
+		result.Messages = append(result.Messages, i18n.DailyHalfway(e.Language))
 		user.HalfwayWarningSent = true
 	}
 	if e.WarningFiveMinEnabled && !user.FiveMinWarningSent && user.RemainingSec <= 300 {
-		result.Messages = append(result.Messages, "You have 5 minutes remaining.")
+		result.Messages = append(result.Messages, i18n.DailyFiveMinutes(e.Language))
 		user.FiveMinWarningSent = true
 	}
 	if user.RemainingSec == 0 {

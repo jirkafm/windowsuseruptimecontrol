@@ -59,12 +59,13 @@ func TestDefaultLaunchSettingsHideHelperWindow(t *testing.T) {
 func TestBuildCommandLineIncludesHelperConnectionArguments(t *testing.T) {
 	t.Parallel()
 
-	got := buildCommandLine(`C:\Program Files\Activity\activityhelper.exe`, 5, "http://127.0.0.1:8111/internal/helper/stream", "token-123")
+	got := buildCommandLine(`C:\Program Files\Activity\activityhelper.exe`, 5, "http://127.0.0.1:8111/internal/helper/stream", "token-123", "cs-CZ")
 	for _, want := range []string{
 		`"C:\Program Files\Activity\activityhelper.exe"`,
 		`--session-id 5`,
 		`--helper-url "http://127.0.0.1:8111/internal/helper/stream"`,
 		`--helper-token "token-123"`,
+		`--speech-culture "cs-CZ"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("command line %q missing %q", got, want)

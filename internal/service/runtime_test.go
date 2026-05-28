@@ -141,6 +141,7 @@ func TestTickUsesWeeklyFlexMode(t *testing.T) {
 	rt := Runtime{
 		Config: model.Config{
 			QuotaMode:                 model.QuotaModeWeeklyFlex,
+			Language:                  "cs",
 			DefaultWeeklyAllowanceSec: 25200,
 			ReenforcementDelaySec:     180,
 		},
@@ -704,6 +705,7 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 	rt := Runtime{
 		Config: model.Config{
 			QuotaMode:                 model.QuotaModeWeeklyFlex,
+			Language:                  "cs",
 			DefaultWeeklyAllowanceSec: 25200,
 			UserUIEnabled:             true,
 			UserUIPort:                8122,
@@ -719,6 +721,9 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 	view := rt.ConfigView()
 	if view["quota_mode"] != model.QuotaModeWeeklyFlex {
 		t.Fatalf("quota_mode = %#v, want weekly-flex", view["quota_mode"])
+	}
+	if view["language"] != "cs" {
+		t.Fatalf("language = %#v, want cs", view["language"])
 	}
 	if view["default_weekly_allowance_sec"] != int64(25200) {
 		t.Fatalf("default_weekly_allowance_sec = %#v, want 25200", view["default_weekly_allowance_sec"])

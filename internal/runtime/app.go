@@ -19,6 +19,7 @@ import (
 	"windowsuseruptimecontrol/internal/config"
 	"windowsuseruptimecontrol/internal/helper"
 	"windowsuseruptimecontrol/internal/helperipc"
+	"windowsuseruptimecontrol/internal/i18n"
 	"windowsuseruptimecontrol/internal/logging"
 	"windowsuseruptimecontrol/internal/model"
 	"windowsuseruptimecontrol/internal/service"
@@ -101,6 +102,7 @@ func ServiceMain(ctx context.Context) error {
 		HelperPath:     cfg.HelperPath,
 		HelperURL:      helperStreamURL(cfg),
 		HelperToken:    helperToken,
+		SpeechCulture:  i18n.SpeechCulture(cfg.Language),
 		LaunchCooldown: time.Duration(cfg.HelperLaunchCooldownSec) * time.Second,
 	}
 
@@ -140,12 +142,12 @@ func HelperMain(ctx context.Context) error {
 		return err
 	}
 
-	streamURL, token, sessionID, err := helperConnectionArgs(os.Args)
+	streamURL, token, sessionID, speechCulture, err := helperConnectionArgs(os.Args)
 	if err != nil {
 		return err
 	}
 
-	rt := helper.Runtime{Speaker: helper.WindowsSpeaker{}}
+	rt := helper.Runtime{Speaker: helper.WindowsSpeaker{Culture: speechCulture}}
 	return rt.RunHTTPStream(ctx, streamURL, token, current.Uid, sessionID)
 }
 
@@ -167,17 +169,18 @@ func isWindowsLikePath() bool {
 }
 
 func helperSessionID() uint32 {
-	_, _, sessionID, err := helperConnectionArgs(os.Args)
+	_, _, sessionID, _, err := helperConnectionArgs(os.Args)
 	if err != nil {
 		return 0
 	}
 	return sessionID
 }
 
-func helperConnectionArgs(args []string) (string, string, uint32, error) {
+func helperConnectionArgs(args []string) (string, string, uint32, string, error) {
 	var streamURL string
 	var token string
 	var sessionID uint32
+	speechCulture := i18n.SpeechCulture("")
 	for idx := 0; idx < len(args)-1; idx++ {
 		switch args[idx] {
 		case "--helper-url":
@@ -187,18 +190,20 @@ func helperConnectionArgs(args []string) (string, string, uint32, error) {
 		case "--session-id":
 			value, err := strconv.ParseUint(args[idx+1], 10, 32)
 			if err != nil {
-				return "", "", 0, err
+				return "", "", 0, "", err
 			}
 			sessionID = uint32(value)
+		case "--speech-culture":
+			speechCulture = i18n.SpeechCulture(args[idx+1])
 		}
 	}
 	if strings.TrimSpace(streamURL) == "" {
-		return "", "", 0, fmt.Errorf("helper-url is required")
+		return "", "", 0, "", fmt.Errorf("helper-url is required")
 	}
 	if strings.TrimSpace(token) == "" {
-		return "", "", 0, fmt.Errorf("helper-token is required")
+		return "", "", 0, "", fmt.Errorf("helper-token is required")
 	}
-	return streamURL, token, sessionID, nil
+	return streamURL, token, sessionID, speechCulture, nil
 }
 
 func helperStreamURL(cfg model.Config) string {

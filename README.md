@@ -4,7 +4,7 @@ WindowsUserUptimeControl is a Windows-only uptime enforcer built around a backgr
 
 ## Highlights
 - **Per-user daily uptime enforcement** — the state store keeps a separate daily allowance, consumed time, remaining time, and warning/enforcement flags for each tracked Windows SID so one user exhausting their time does not overwrite another user’s quota.
-- **Active console detection with spoken warnings** — the service only counts usage for the active console session, launches one `activityhelper.exe` per active user, and delivers startup, halfway, five-minute, and countdown announcements over a private live HTTP stream.
+- **Active console detection with localized spoken warnings** — the service only counts usage for the active console session, launches one `activityhelper.exe` per active user, and delivers English or Czech startup, halfway, five-minute, and countdown announcements over a private live HTTP stream.
 - **Admin API plus restart reenforcement** — the HTTP API exposes health, config, quota, reset, announcement, logs, and immediate-enforcement operations behind a bearer token, while the runtime also supports same-day reenforcement after reboot with a configurable delay before enforcing again.
 
 ## Quick Start
@@ -67,12 +67,13 @@ The service resolves usernames or SIDs, writes the updated state to disk, and ro
 
 ## Install/Operate From CLI
 - Install the service: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>"`.
+- Install with Czech UI and TTS announcements: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>" -Language cs`.
 - Uninstall the service: `pwsh -ExecutionPolicy Bypass -File .\installer\uninstall.ps1`.
 - Inspect the API surface: `curl -H "Authorization: Bearer <token>" http://localhost:8111/v1/info`.
 - Trigger immediate enforcement: `curl -X POST -H "Authorization: Bearer <token>" http://localhost:8111/v1/enforcement/hibernate-now`.
 
 ## Configuration Notes
-The installer writes `C:\ProgramData\Activity\config\config.json` with defaults for `api_bind_address`, `api_port`, `default_daily_allowance_sec`, `reenforcement_delay_sec`, `helper_launch_cooldown_sec`, warning toggles, helper path, log level, and size-based log rotation. Logs rotate at `log_max_size_mb` megabytes, keep `log_max_backups` rolled files, remove rolled logs older than `log_max_age_days`, and optionally compress rolled files with `log_compress`. The default rolling policy is 10 MB, 10 backups, 365 days, and compression enabled. The config directory is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the raw bearer token.
+The installer writes `C:\ProgramData\Activity\config\config.json` with defaults for `api_bind_address`, `api_port`, `language`, `default_daily_allowance_sec`, `reenforcement_delay_sec`, `helper_launch_cooldown_sec`, warning toggles, helper path, log level, and size-based log rotation. Set `language` to `en` or `cs`; Czech speech uses the Windows `cs-CZ` text-to-speech culture. Logs rotate at `log_max_size_mb` megabytes, keep `log_max_backups` rolled files, remove rolled logs older than `log_max_age_days`, and optionally compress rolled files with `log_compress`. The default rolling policy is 10 MB, 10 backups, 365 days, and compression enabled. The config directory is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the raw bearer token.
 
 Manual validation steps for installation, ACLs, helper relaunch, API auth, user quota behavior, and enforcement flow are documented in [docs/windows-validation-checklist.md](docs/windows-validation-checklist.md).
 
