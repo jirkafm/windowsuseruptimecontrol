@@ -2,16 +2,21 @@ param(
     [string]$InstallRoot = "C:\ProgramData\Activity",
     [int]$ApiPort = 8111,
     [string]$BearerToken = "change-me",
-    [ValidateSet("daily","weekly-flex")]
-    [string]$QuotaMode = "daily",
+    [ValidateSet("daily","weekly-flex","scheduled-days")]
+    [string]$QuotaMode = "scheduled-days",
     [ValidateSet("en","cs","en-US","cs-CZ")]
     [string]$Language = "en",
+    [bool[]]$EnabledWeekdays = @($true, $true, $true, $true, $true, $false, $false),
     [int]$DefaultWeeklyAllowanceSec = 25200,
     [int]$UserUiPort = 0,
     [bool]$UserUiEnabled = $false
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($EnabledWeekdays.Count -ne 7) {
+    throw "EnabledWeekdays must contain 7 boolean values ordered Monday through Sunday."
+}
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
     throw "Administrator rights are required."
@@ -39,6 +44,7 @@ icacls $stateRoot /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-N
     bearer_token = $BearerToken
     quota_mode = $QuotaMode
     language = $Language
+    enabled_weekdays = $EnabledWeekdays
     default_daily_allowance_sec = 3600
     default_weekly_allowance_sec = $DefaultWeeklyAllowanceSec
     user_ui_enabled = ($UserUiEnabled -or $QuotaMode -eq "weekly-flex")

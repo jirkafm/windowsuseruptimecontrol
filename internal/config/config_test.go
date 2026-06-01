@@ -134,6 +134,87 @@ func TestLoadConfigEnablesUserUIByDefaultForWeeklyFlex(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDefaultsScheduledDaysToWeekdays(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{"api_port":8088,"bearer_token":"secret-token","quota_mode":"scheduled-days"}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.QuotaMode != model.QuotaModeScheduledDays {
+		t.Fatalf("QuotaMode = %q, want scheduled-days", cfg.QuotaMode)
+	}
+	want := []bool{true, true, true, true, true, false, false}
+	if len(cfg.EnabledWeekdays) != len(want) {
+		t.Fatalf("EnabledWeekdays length = %d, want %d", len(cfg.EnabledWeekdays), len(want))
+	}
+	for idx := range want {
+		if cfg.EnabledWeekdays[idx] != want[idx] {
+			t.Fatalf("EnabledWeekdays[%d] = %t, want %t", idx, cfg.EnabledWeekdays[idx], want[idx])
+		}
+	}
+}
+
+func TestLoadConfigHonorsScheduledDaysOverride(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+		"api_port":8088,
+		"bearer_token":"secret-token",
+		"quota_mode":"scheduled-days",
+		"enabled_weekdays":[true,false,true,false,true,false,true]
+	}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	want := []bool{true, false, true, false, true, false, true}
+	for idx := range want {
+		if cfg.EnabledWeekdays[idx] != want[idx] {
+			t.Fatalf("EnabledWeekdays[%d] = %t, want %t", idx, cfg.EnabledWeekdays[idx], want[idx])
+		}
+	}
+}
+
+func TestLoadConfigRejectsInvalidScheduledDaysLength(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+		"api_port":8088,
+		"bearer_token":"secret-token",
+		"quota_mode":"scheduled-days",
+		"enabled_weekdays":[true,false]
+	}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected invalid enabled_weekdays length to fail")
+	}
+	if !strings.Contains(err.Error(), "enabled_weekdays") {
+		t.Fatalf("error = %v, want enabled_weekdays validation", err)
+	}
+}
+
 func TestLoadConfigRejectsUnknownQuotaMode(t *testing.T) {
 	t.Parallel()
 

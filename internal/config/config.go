@@ -33,9 +33,12 @@ func Load(path string) (model.Config, error) {
 		return model.Config{}, fmt.Errorf("bearer_token must be set")
 	}
 	switch cfg.QuotaMode {
-	case model.QuotaModeDaily, model.QuotaModeWeeklyFlex:
+	case model.QuotaModeDaily, model.QuotaModeWeeklyFlex, model.QuotaModeScheduledDays:
 	default:
-		return model.Config{}, fmt.Errorf("quota_mode must be %q or %q", model.QuotaModeDaily, model.QuotaModeWeeklyFlex)
+		return model.Config{}, fmt.Errorf("quota_mode must be %q, %q, or %q", model.QuotaModeDaily, model.QuotaModeWeeklyFlex, model.QuotaModeScheduledDays)
+	}
+	if len(cfg.EnabledWeekdays) != 7 {
+		return model.Config{}, fmt.Errorf("enabled_weekdays must contain 7 booleans ordered Monday through Sunday")
 	}
 	if cfg.DefaultWeeklyAllowanceSec <= 0 {
 		return model.Config{}, fmt.Errorf("default_weekly_allowance_sec must be positive")
@@ -56,6 +59,9 @@ func applyDefaults(cfg *model.Config) {
 	}
 	if cfg.Language == "" {
 		cfg.Language = i18n.English
+	}
+	if cfg.EnabledWeekdays == nil {
+		cfg.EnabledWeekdays = []bool{true, true, true, true, true, false, false}
 	}
 	if cfg.DefaultDailyAllowanceSec == 0 {
 		cfg.DefaultDailyAllowanceSec = 3600

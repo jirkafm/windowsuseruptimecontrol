@@ -66,19 +66,23 @@ The service resolves usernames or SIDs, writes the updated state to disk, and ro
 - `./scripts/build-release.sh` — runs tests, builds both Windows binaries, refreshes the release package, creates the zip bundle, and verifies the archive. See [docs/release.md](docs/release.md).
 
 ## Install/Operate From CLI
-- Install the service: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>"`.
+- Install the service with the default weekdays-enabled schedule: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>"`.
+- Install with unrestricted daily mode: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>" -QuotaMode daily`.
 - Install with Czech UI and TTS announcements: `pwsh -ExecutionPolicy Bypass -File .\installer\install.ps1 -ApiPort 8111 -BearerToken "<token>" -Language cs`.
 - Uninstall the service: `pwsh -ExecutionPolicy Bypass -File .\installer\uninstall.ps1`.
 - Inspect the API surface: `curl -H "Authorization: Bearer <token>" http://localhost:8111/v1/info`.
 - Trigger immediate enforcement: `curl -X POST -H "Authorization: Bearer <token>" http://localhost:8111/v1/enforcement/hibernate-now`.
 
 ## Configuration Notes
-The installer writes `C:\ProgramData\Activity\config\config.json` with defaults for `api_bind_address`, `api_port`, `language`, `default_daily_allowance_sec`, `reenforcement_delay_sec`, `helper_launch_cooldown_sec`, warning toggles, helper path, log level, and size-based log rotation. Set `language` to `en` or `cs`; Czech speech uses the Windows `cs-CZ` text-to-speech culture. Logs rotate at `log_max_size_mb` megabytes, keep `log_max_backups` rolled files, remove rolled logs older than `log_max_age_days`, and optionally compress rolled files with `log_compress`. The default rolling policy is 10 MB, 10 backups, 365 days, and compression enabled. The config directory is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the raw bearer token.
+The installer writes `C:\ProgramData\Activity\config\config.json` with defaults for `api_bind_address`, `api_port`, `quota_mode`, `language`, `enabled_weekdays`, `default_daily_allowance_sec`, `reenforcement_delay_sec`, `helper_launch_cooldown_sec`, warning toggles, helper path, log level, and size-based log rotation. Set `language` to `en` or `cs`; Czech speech uses the Windows `cs-CZ` text-to-speech culture. `enabled_weekdays` is ordered Monday through Sunday and defaults to Monday-Friday enabled and Saturday-Sunday disabled. Logs rotate at `log_max_size_mb` megabytes, keep `log_max_backups` rolled files, remove rolled logs older than `log_max_age_days`, and optionally compress rolled files with `log_compress`. The default rolling policy is 10 MB, 10 backups, 365 days, and compression enabled. The config directory is intended to be readable only by `Administrators` and `SYSTEM` so standard users cannot read the raw bearer token.
 
 Manual validation steps for installation, ACLs, helper relaunch, API auth, user quota behavior, and enforcement flow are documented in [docs/windows-validation-checklist.md](docs/windows-validation-checklist.md).
 
 ## Weekly Flex Mode
-Daily mode remains the default. To enable weekly-flex mode, install with `-QuotaMode weekly-flex`. The default weekly allowance is 7 hours (`25200` seconds). Administrators control the total allowance. The logged-in user can open the local user UI on `127.0.0.1` and redistribute that allowance across Monday-Sunday in 15-minute increments. No day can receive more than 50% of the weekly allowance.
+Scheduled-days mode is the installer default. To enable weekly-flex mode, install with `-QuotaMode weekly-flex`. The default weekly allowance is 7 hours (`25200` seconds). Administrators control the total allowance. The logged-in user can open the local user UI on `127.0.0.1` and redistribute that allowance across Monday-Sunday in 15-minute increments. No day can receive more than 50% of the weekly allowance.
+
+## Scheduled Days Mode
+Scheduled-days mode uses the normal daily allowance on enabled weekdays and blocks use entirely on disabled weekdays. It is the default installer mode, and can also be selected explicitly with `-QuotaMode scheduled-days` or `quota_mode` set to `scheduled-days` in config. Administrators configure `enabled_weekdays` as seven booleans ordered Monday through Sunday; the default is `[true,true,true,true,true,false,false]`. The installer also accepts `-EnabledWeekdays` with seven boolean values in the same order.
 
 ## Project Layout
 - `cmd/activitysvc` — service entrypoint that starts the Windows service runner and main runtime loop.

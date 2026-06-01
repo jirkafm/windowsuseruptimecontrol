@@ -142,6 +142,7 @@ func TestTickUsesWeeklyFlexMode(t *testing.T) {
 		Config: model.Config{
 			QuotaMode:                 model.QuotaModeWeeklyFlex,
 			Language:                  "cs",
+			EnabledWeekdays:           []bool{true, true, true, true, true, false, false},
 			DefaultWeeklyAllowanceSec: 25200,
 			ReenforcementDelaySec:     180,
 		},
@@ -160,6 +161,88 @@ func TestTickUsesWeeklyFlexMode(t *testing.T) {
 	}
 	if _, ok := store.state.Users["sid-john"]; ok {
 		t.Fatal("daily state should not be created in weekly-flex mode")
+	}
+}
+
+func TestTickUsesDailyQuotaOnEnabledScheduledDay(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{state: model.StateFile{
+		ServiceDate: "2026-06-01",
+		Users:       map[string]model.UserDayState{},
+	}}
+	rt := Runtime{
+		Config: model.Config{
+			QuotaMode:                model.QuotaModeScheduledDays,
+			EnabledWeekdays:          []bool{true, true, true, true, true, false, false},
+			DefaultDailyAllowanceSec: 3600,
+			ReenforcementDelaySec:    180,
+			WarningHalfwayEnabled:    true,
+			WarningFiveMinEnabled:    true,
+		},
+		Store:    store,
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   &fakeHelperBus{},
+		Power:    &fakePower{},
+	}
+
+	if err := rt.Tick(context.Background(), time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC), 60); err != nil {
+		t.Fatalf("Tick error: %v", err)
+	}
+
+	user := store.state.Users["sid-john"]
+	if user.ConsumedSec != 60 {
+		t.Fatalf("ConsumedSec = %d, want 60", user.ConsumedSec)
+	}
+	if user.Exhausted {
+		t.Fatal("Exhausted = true, want false on enabled scheduled day with remaining daily quota")
+	}
+}
+
+func TestTickEnforcesImmediatelyOnDisabledScheduledDay(t *testing.T) {
+	t.Parallel()
+
+	helper := &fakeHelperBus{}
+	power := &fakePower{}
+	store := &fakeStore{state: model.StateFile{
+		ServiceDate: "2026-06-06",
+		Users:       map[string]model.UserDayState{},
+	}}
+	rt := Runtime{
+		Config: model.Config{
+			QuotaMode:                model.QuotaModeScheduledDays,
+			EnabledWeekdays:          []bool{true, true, true, true, true, false, false},
+			DefaultDailyAllowanceSec: 3600,
+			ReenforcementDelaySec:    180,
+		},
+		Store:    store,
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   helper,
+		Power:    power,
+	}
+
+	if err := rt.Tick(context.Background(), time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC), 60); err != nil {
+		t.Fatalf("Tick error: %v", err)
+	}
+
+	user := store.state.Users["sid-john"]
+	if !user.Exhausted {
+		t.Fatal("Exhausted = false, want true on disabled scheduled day")
+	}
+	if user.ConsumedSec != 0 {
+		t.Fatalf("ConsumedSec = %d, want 0 because disabled days do not consume quota", user.ConsumedSec)
+	}
+	if user.LastEnforcementReason != "weekday disabled" {
+		t.Fatalf("LastEnforcementReason = %q, want weekday disabled", user.LastEnforcementReason)
+	}
+	if power.hibernateCalls != 1 {
+		t.Fatalf("hibernateCalls = %d, want 1", power.hibernateCalls)
+	}
+	if len(helper.messages) != 11 {
+		t.Fatalf("messages = %#v, want disabled-day warning plus countdown", helper.messages)
+	}
+	if !strings.Contains(helper.messages[0], "not available today") {
+		t.Fatalf("first message = %q, want disabled-day warning", helper.messages[0])
 	}
 }
 
@@ -706,6 +789,7 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 		Config: model.Config{
 			QuotaMode:                 model.QuotaModeWeeklyFlex,
 			Language:                  "cs",
+			EnabledWeekdays:           []bool{true, true, true, true, true, false, false},
 			DefaultWeeklyAllowanceSec: 25200,
 			UserUIEnabled:             true,
 			UserUIPort:                8122,
@@ -724,6 +808,13 @@ func TestConfigViewIncludesWarningToggles(t *testing.T) {
 	}
 	if view["language"] != "cs" {
 		t.Fatalf("language = %#v, want cs", view["language"])
+	}
+	gotSchedule, ok := view["enabled_weekdays"].([]bool)
+	if !ok {
+		t.Fatalf("enabled_weekdays = %#v, want []bool", view["enabled_weekdays"])
+	}
+	if len(gotSchedule) != 7 || gotSchedule[0] != true || gotSchedule[5] != false {
+		t.Fatalf("enabled_weekdays = %#v, want Monday-Friday enabled", gotSchedule)
 	}
 	if view["default_weekly_allowance_sec"] != int64(25200) {
 		t.Fatalf("default_weekly_allowance_sec = %#v, want 25200", view["default_weekly_allowance_sec"])
