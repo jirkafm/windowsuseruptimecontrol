@@ -16,11 +16,14 @@ Describe "install.ps1" {
         $script | Should -Match ";;;SY"
         $script | Should -Match ";;;BA"
         $script | Should -Not -Match "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-        $script | Should -Match '\[ValidateSet\("daily","weekly-flex"\)\]'
-        $script | Should -Match '\$QuotaMode = "daily"'
+        $script | Should -Match '\[ValidateSet\("daily","weekly-flex","scheduled-days"\)\]'
+        $script | Should -Match '\$QuotaMode = "scheduled-days"'
         $script | Should -Match '\[ValidateSet\("en","cs","en-US","cs-CZ"\)\]'
         $script | Should -Match '\$Language = "en"'
         $script | Should -Match 'language = \$Language'
+        $script | Should -Match '\$EnabledWeekdays = @\(\$true, \$true, \$true, \$true, \$true, \$false, \$false\)'
+        $script | Should -Match 'EnabledWeekdays must contain 7 boolean values ordered Monday through Sunday'
+        $script | Should -Match 'enabled_weekdays = \$EnabledWeekdays'
         $script | Should -Match 'default_weekly_allowance_sec = \$DefaultWeeklyAllowanceSec'
         $script | Should -Match 'user_ui_port = \$UserUiPort'
     }

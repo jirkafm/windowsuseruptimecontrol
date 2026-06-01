@@ -5,8 +5,9 @@ import "time"
 type QuotaMode string
 
 const (
-	QuotaModeDaily      QuotaMode = "daily"
-	QuotaModeWeeklyFlex QuotaMode = "weekly-flex"
+	QuotaModeDaily         QuotaMode = "daily"
+	QuotaModeWeeklyFlex    QuotaMode = "weekly-flex"
+	QuotaModeScheduledDays QuotaMode = "scheduled-days"
 )
 
 type Config struct {
@@ -15,6 +16,7 @@ type Config struct {
 	BearerToken               string    `json:"bearer_token"`
 	QuotaMode                 QuotaMode `json:"quota_mode"`
 	Language                  string    `json:"language"`
+	EnabledWeekdays           []bool    `json:"enabled_weekdays,omitempty"`
 	DefaultDailyAllowanceSec  int64     `json:"default_daily_allowance_sec"`
 	DefaultWeeklyAllowanceSec int64     `json:"default_weekly_allowance_sec"`
 	UserUIEnabled             bool      `json:"user_ui_enabled"`

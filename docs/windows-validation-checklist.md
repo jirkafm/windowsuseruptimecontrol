@@ -306,7 +306,37 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8111/v1/users/<john-identi
   - weekly consumed time is reset
   - saved distribution is carried forward when valid
 
-## 13. Helper Respawn
+## 13. Scheduled Days Mode
+
+- Reinstall or update the config with the default scheduled-days mode:
+
+```powershell
+.\installer\install.ps1 -ApiPort 8111 -BearerToken "replace-with-test-token"
+```
+
+- Confirm sanitized config reports scheduled-days mode and the default Monday-Friday schedule:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8111/v1/config" `
+  -Headers @{ Authorization = "Bearer replace-with-test-token" }
+```
+
+- Expected:
+  - `quota_mode` is `scheduled-days`
+  - `enabled_weekdays` is `true,true,true,true,true,false,false`
+
+- Validate behavior on an enabled weekday.
+- Expected:
+  - daily allowance is consumed normally
+  - regular startup, halfway, five-minute, and countdown warnings still apply
+
+- Temporarily configure the current day as disabled in `enabled_weekdays`, restart the service, and log in as `John`.
+- Expected:
+  - no daily quota is consumed
+  - TTS announces that computer use is unavailable today
+  - countdown and enforcement execute immediately
+
+## 14. Helper Respawn
 
 - While `John` is the active user, terminate the helper process:
 
@@ -320,7 +350,7 @@ Stop-Process -Name activityhelper -Force
   - helper process is relaunched
   - later announcements still produce TTS
 
-## 14. Service Stop Permissions
+## 15. Service Stop Permissions
 
 - As a standard non-admin user, try:
 
@@ -343,7 +373,7 @@ Start-Service WindowsUserUptimeControlActivityService
 - Expected:
   - stop and start succeed
 
-## 15. Network Reachability
+## 16. Network Reachability
 
 - From another machine on the same network, call:
 
@@ -364,13 +394,14 @@ Invoke-RestMethod -Uri "http://<target-host>:8111/v1/users" `
 - Expected:
   - management endpoint works remotely
 
-## 16. Pass Criteria
+## 17. Pass Criteria
 
 - Service starts automatically after install and reboot
 - Helper starts for the logged-in user and TTS is audible
 - Per-user quotas are tracked separately
 - Weekly-flex mode exposes user UI only on loopback
 - Weekly-flex users can redistribute but not increase their weekly allowance
+- Scheduled-days mode allows configured weekdays and blocks disabled weekdays
 - Only the active console user consumes time
 - Countdown and enforcement execute correctly
 - Same-day reenforcement delay works

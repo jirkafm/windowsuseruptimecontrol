@@ -78,6 +78,22 @@ func TestApplyServiceStartupArgsEnablesWeeklyFlexMode(t *testing.T) {
 	}
 }
 
+func TestApplyServiceStartupArgsEnablesScheduledDaysMode(t *testing.T) {
+	t.Parallel()
+
+	cfg := model.Config{QuotaMode: model.QuotaModeDaily}
+	got, err := applyServiceStartupArgs(cfg, []string{"activitysvc.exe", "--quota-mode", "scheduled-days"})
+	if err != nil {
+		t.Fatalf("applyServiceStartupArgs error: %v", err)
+	}
+	if got.QuotaMode != model.QuotaModeScheduledDays {
+		t.Fatalf("QuotaMode = %q, want scheduled-days", got.QuotaMode)
+	}
+	if got.UserUIEnabled {
+		t.Fatal("UserUIEnabled = true, want false when scheduled-days is enabled")
+	}
+}
+
 func TestApplyServiceStartupArgsRejectsUnknownQuotaMode(t *testing.T) {
 	t.Parallel()
 

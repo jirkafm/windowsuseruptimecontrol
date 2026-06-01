@@ -240,8 +240,10 @@ func applyServiceStartupArgs(cfg model.Config, args []string) (model.Config, err
 			case model.QuotaModeWeeklyFlex:
 				cfg.QuotaMode = model.QuotaModeWeeklyFlex
 				cfg.UserUIEnabled = true
+			case model.QuotaModeScheduledDays:
+				cfg.QuotaMode = model.QuotaModeScheduledDays
 			default:
-				return model.Config{}, fmt.Errorf("quota-mode must be %q or %q", model.QuotaModeDaily, model.QuotaModeWeeklyFlex)
+				return model.Config{}, fmt.Errorf("quota-mode must be %q, %q, or %q", model.QuotaModeDaily, model.QuotaModeWeeklyFlex, model.QuotaModeScheduledDays)
 			}
 		}
 	}

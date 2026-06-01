@@ -83,10 +83,46 @@ func (r *Runtime) Tick(ctx context.Context, now time.Time, elapsedSec int64) err
 		r.restartReenforcementPending = false
 	}
 
-	if r.Config.QuotaMode == model.QuotaModeWeeklyFlex {
+	switch r.Config.QuotaMode {
+	case model.QuotaModeWeeklyFlex:
 		return r.tickWeekly(ctx, now, active, state, elapsedSec)
+	case model.QuotaModeScheduledDays:
+		return r.tickScheduled(ctx, now, active, state, elapsedSec)
+	default:
+		return r.tickDaily(ctx, now, active, state, elapsedSec)
 	}
-	return r.tickDaily(ctx, now, active, state, elapsedSec)
+}
+
+func (r *Runtime) tickScheduled(ctx context.Context, now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) error {
+	if scheduledDayEnabled(r.Config.EnabledWeekdays, now) {
+		return r.tickDaily(ctx, now, active, state, elapsedSec)
+	}
+
+	result := disabledDayEvaluation(now, active, state, r.Config.DefaultDailyAllowanceSec)
+	afterUser := result.State.Users[active.UserSID]
+	if err := r.Store.Save(result.State); err != nil {
+		return err
+	}
+	if r.activeTrackingSID != active.UserSID {
+		r.logf(
+			"scheduled-days control started for user username=%s sid=%s session=%d enabled_today=false",
+			active.Username,
+			active.UserSID,
+			active.SessionID,
+		)
+		r.activeTrackingSID = active.UserSID
+	}
+	if afterUser.Exhausted {
+		r.logf(
+			"user time depleted username=%s sid=%s consumed_sec=%d allowance_sec=%d reason=%q",
+			afterUser.Username,
+			afterUser.UserSID,
+			afterUser.ConsumedSec,
+			afterUser.DailyAllowanceSec,
+			afterUser.LastEnforcementReason,
+		)
+	}
+	return r.deliverEvaluation(ctx, afterUser.UserSID, afterUser.Username, afterUser.RemainingSec, result)
 }
 
 func (r *Runtime) tickDaily(ctx context.Context, now time.Time, active model.ActiveUser, state model.StateFile, elapsedSec int64) error {
@@ -185,6 +221,46 @@ func (r *Runtime) tickWeekly(ctx context.Context, now time.Time, active model.Ac
 	}
 
 	return r.deliverEvaluation(ctx, afterUser.UserSID, afterUser.Username, afterUser.RemainingSec, result)
+}
+
+func scheduledDayEnabled(enabledWeekdays []bool, now time.Time) bool {
+	if len(enabledWeekdays) != 7 {
+		enabledWeekdays = []bool{true, true, true, true, true, false, false}
+	}
+	idx := (int(now.Weekday()) + 6) % 7
+	return enabledWeekdays[idx]
+}
+
+func disabledDayEvaluation(now time.Time, active model.ActiveUser, state model.StateFile, defaultDailyAllowanceSec int64) model.Evaluation {
+	if state.Users == nil {
+		state.Users = map[string]model.UserDayState{}
+	}
+	user := state.Users[active.UserSID]
+	if user.UserSID == "" {
+		user = model.UserDayState{
+			UserSID:           active.UserSID,
+			Username:          active.Username,
+			DailyAllowanceSec: defaultDailyAllowanceSec,
+		}
+	}
+	user.Date = now.Format("2006-01-02")
+	user.Username = active.Username
+	if user.DailyAllowanceSec == 0 {
+		user.DailyAllowanceSec = defaultDailyAllowanceSec
+	}
+	user.Exhausted = true
+	user.ReenforcementPending = false
+	user.ReenforcementDeadline = time.Time{}
+	user.LastEnforcementReason = "weekday disabled"
+	user.RemainingSec = 0
+
+	state.Users[active.UserSID] = user
+	return model.Evaluation{
+		State:              state,
+		Messages:           []string{"Computer use is not available today."},
+		Countdown:          []string{"10", "9", "8", "7", "6", "5", "4", "3", "2", "1"},
+		TriggerEnforcement: true,
+	}
 }
 
 func (r *Runtime) deliverEvaluation(ctx context.Context, userSID, username string, remainingSec int64, result model.Evaluation) error {
@@ -324,6 +400,7 @@ func (r *Runtime) ConfigView() map[string]any {
 		"api_port":                     r.Config.APIPort,
 		"quota_mode":                   r.Config.QuotaMode,
 		"language":                     r.Config.Language,
+		"enabled_weekdays":             r.Config.EnabledWeekdays,
 		"default_daily_allowance_sec":  r.Config.DefaultDailyAllowanceSec,
 		"default_weekly_allowance_sec": r.Config.DefaultWeeklyAllowanceSec,
 		"user_ui_enabled":              r.Config.UserUIEnabled,
