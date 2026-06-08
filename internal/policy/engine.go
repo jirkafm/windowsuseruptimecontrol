@@ -42,7 +42,7 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 		if !user.ReenforcementPending {
 			user.ReenforcementPending = true
 			user.ReenforcementDeadline = now.Add(time.Duration(e.ReenforcementDelaySec) * time.Second)
-			result.Messages = append(result.Messages, i18n.DailyNoTime(e.Language, e.ReenforcementDelaySec))
+			addMessage(&result, i18n.DailyNoTime(e.Language, e.ReenforcementDelaySec), i18n.DailyNoTime(i18n.English, e.ReenforcementDelaySec))
 		} else if !user.ReenforcementDeadline.After(now) {
 			result.TriggerEnforcement = true
 			result.Countdown = countdown()
@@ -57,15 +57,15 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 
 	halfwayThreshold := user.DailyAllowanceSec / 2
 	if !user.StartupWarningSent {
-		result.Messages = append(result.Messages, i18n.DailyRemaining(e.Language, user.RemainingSec/60))
+		addMessage(&result, i18n.DailyRemaining(e.Language, user.RemainingSec/60), i18n.DailyRemaining(i18n.English, user.RemainingSec/60))
 		user.StartupWarningSent = true
 	}
 	if e.WarningHalfwayEnabled && !user.HalfwayWarningSent && user.ConsumedSec >= halfwayThreshold {
-		result.Messages = append(result.Messages, i18n.DailyHalfway(e.Language))
+		addMessage(&result, i18n.DailyHalfway(e.Language), i18n.DailyHalfway(i18n.English))
 		user.HalfwayWarningSent = true
 	}
 	if e.WarningFiveMinEnabled && !user.FiveMinWarningSent && user.RemainingSec <= 300 {
-		result.Messages = append(result.Messages, i18n.DailyFiveMinutes(e.Language))
+		addMessage(&result, i18n.DailyFiveMinutes(e.Language), i18n.DailyFiveMinutes(i18n.English))
 		user.FiveMinWarningSent = true
 	}
 	if user.RemainingSec == 0 {
@@ -78,6 +78,11 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 	state.Users[active.UserSID] = user
 	result.State = state
 	return result
+}
+
+func addMessage(result *model.Evaluation, message, fallbackMessage string) {
+	result.Messages = append(result.Messages, message)
+	result.FallbackMessages = append(result.FallbackMessages, fallbackMessage)
 }
 
 func countdown() []string {

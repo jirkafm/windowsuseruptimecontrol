@@ -147,7 +147,10 @@ func HelperMain(ctx context.Context) error {
 		return err
 	}
 
-	rt := helper.Runtime{Speaker: helper.WindowsSpeaker{Culture: speechCulture}}
+	rt := helper.Runtime{Speaker: &helper.WindowsSpeaker{
+		Culture: speechCulture,
+		LogPath: filepath.Join(installRoot(), "logs", "helper.log"),
+	}}
 	return rt.RunHTTPStream(ctx, streamURL, token, current.Uid, sessionID)
 }
 

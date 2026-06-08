@@ -12,11 +12,17 @@ import (
 )
 
 type fakeSpeaker struct {
-	spoken []string
+	spoken    []string
+	fallbacks []string
 }
 
-func (f *fakeSpeaker) Speak(text string) error {
+func (f *fakeSpeaker) Speak(text string, fallbackText ...string) error {
 	f.spoken = append(f.spoken, text)
+	if len(fallbackText) > 0 {
+		f.fallbacks = append(f.fallbacks, fallbackText[0])
+	} else {
+		f.fallbacks = append(f.fallbacks, "")
+	}
 	return nil
 }
 
@@ -70,6 +76,28 @@ func TestRuntimeSpeaksHTTPStreamMessagesAndExitsWhenClosed(t *testing.T) {
 
 	if len(speaker.spoken) != 1 || speaker.spoken[0] != "hello" {
 		t.Fatalf("spoken = %#v, want [hello]", speaker.spoken)
+	}
+}
+
+func TestRuntimePassesFallbackMessagesToSpeaker(t *testing.T) {
+	t.Parallel()
+
+	speaker := &fakeSpeaker{}
+	commands := make(chan helperipc.Command, 1)
+	commands <- helperipc.Command{
+		Type:            helperipc.CommandSpeak,
+		Message:         "Zbývá ti 5 minut.",
+		FallbackMessage: "You have 5 minutes remaining.",
+	}
+	close(commands)
+
+	rt := Runtime{Speaker: speaker}
+	if err := rt.Run(context.Background(), commands); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	if len(speaker.fallbacks) != 1 || speaker.fallbacks[0] != "You have 5 minutes remaining." {
+		t.Fatalf("fallbacks = %#v, want English fallback", speaker.fallbacks)
 	}
 }
 

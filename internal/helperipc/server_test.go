@@ -27,6 +27,27 @@ func TestServerDeliversSpeakCommandToRegisteredHelper(t *testing.T) {
 	}
 }
 
+func TestServerSpeakIncludesFallbackMessage(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer()
+	helper, unregister := server.Register("sid-john", 5)
+	defer unregister()
+
+	if err := server.Speak(context.Background(), "sid-john", "Zbývá ti 5 minut.", "You have 5 minutes remaining."); err != nil {
+		t.Fatalf("Speak error: %v", err)
+	}
+
+	select {
+	case got := <-helper:
+		if got.FallbackMessage != "You have 5 minutes remaining." {
+			t.Fatalf("FallbackMessage = %q, want English fallback", got.FallbackMessage)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for helper command")
+	}
+}
+
 func TestServerReplacingHelperClosesPreviousConnection(t *testing.T) {
 	t.Parallel()
 

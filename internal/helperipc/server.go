@@ -49,8 +49,12 @@ func (s *Server) Connected(userSID string) bool {
 	return ok
 }
 
-func (s *Server) Speak(ctx context.Context, userSID, message string) error {
-	return s.Send(ctx, userSID, Command{Type: CommandSpeak, Message: message})
+func (s *Server) Speak(ctx context.Context, userSID, message string, fallbackMessage ...string) error {
+	cmd := Command{Type: CommandSpeak, Message: message}
+	if len(fallbackMessage) > 0 {
+		cmd.FallbackMessage = fallbackMessage[0]
+	}
+	return s.Send(ctx, userSID, cmd)
 }
 
 func (s *Server) Send(ctx context.Context, userSID string, cmd Command) error {
