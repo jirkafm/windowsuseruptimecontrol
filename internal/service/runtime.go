@@ -98,7 +98,7 @@ func (r *Runtime) tickScheduled(ctx context.Context, now time.Time, active model
 		return r.tickDaily(ctx, now, active, state, elapsedSec)
 	}
 
-	result := disabledDayEvaluation(now, active, state, r.Config.DefaultDailyAllowanceSec)
+	result := disabledDayEvaluation(now, active, state, r.Config.DefaultDailyAllowanceSec, r.Config.ReenforcementDelaySec, r.Config.Language)
 	afterUser := result.State.Users[active.UserSID]
 	if err := r.Store.Save(result.State); err != nil {
 		return err
@@ -231,7 +231,7 @@ func scheduledDayEnabled(enabledWeekdays []bool, now time.Time) bool {
 	return enabledWeekdays[idx]
 }
 
-func disabledDayEvaluation(now time.Time, active model.ActiveUser, state model.StateFile, defaultDailyAllowanceSec int64) model.Evaluation {
+func disabledDayEvaluation(now time.Time, active model.ActiveUser, state model.StateFile, defaultDailyAllowanceSec int64, reenforcementDelaySec int64, language string) model.Evaluation {
 	if state.Users == nil {
 		state.Users = map[string]model.UserDayState{}
 	}
@@ -249,18 +249,22 @@ func disabledDayEvaluation(now time.Time, active model.ActiveUser, state model.S
 		user.DailyAllowanceSec = defaultDailyAllowanceSec
 	}
 	user.Exhausted = true
-	user.ReenforcementPending = false
-	user.ReenforcementDeadline = time.Time{}
 	user.LastEnforcementReason = "weekday disabled"
 	user.RemainingSec = 0
 
-	state.Users[active.UserSID] = user
-	return model.Evaluation{
-		State:              state,
-		Messages:           []string{"Computer use is not available today."},
-		Countdown:          []string{"10", "9", "8", "7", "6", "5", "4", "3", "2", "1"},
-		TriggerEnforcement: true,
+	result := model.Evaluation{State: state}
+	if !user.ReenforcementPending {
+		user.ReenforcementPending = true
+		user.ReenforcementDeadline = now.Add(time.Duration(reenforcementDelaySec) * time.Second)
+		result.Messages = append(result.Messages, i18n.ScheduledUnavailable(language, reenforcementDelaySec))
+	} else if !user.ReenforcementDeadline.After(now) {
+		result.TriggerEnforcement = true
+		result.Countdown = []string{"10", "9", "8", "7", "6", "5", "4", "3", "2", "1"}
 	}
+
+	state.Users[active.UserSID] = user
+	result.State = state
+	return result
 }
 
 func (r *Runtime) deliverEvaluation(ctx context.Context, userSID, username string, remainingSec int64, result model.Evaluation) error {

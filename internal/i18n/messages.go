@@ -54,6 +54,13 @@ func DailyNoTime(language string, delaySec int64) string {
 	return fmt.Sprintf("No time remains for today. The computer will hibernate in %d seconds.", delaySec)
 }
 
+func ScheduledUnavailable(language string, delaySec int64) string {
+	if NormalizeLanguage(language) == Czech {
+		return fmt.Sprintf("Dnes není používání počítače povoleno. Počítač se uspí za %d sekund.", delaySec)
+	}
+	return fmt.Sprintf("Computer use is not available today. The computer will hibernate in %d seconds.", delaySec)
+}
+
 func WeeklyRemaining(language string, minutes int64) string {
 	if NormalizeLanguage(language) == Czech {
 		return fmt.Sprintf("Tento týden ti zbývá %d minut.", minutes)

@@ -333,8 +333,8 @@ Invoke-RestMethod -Uri "http://localhost:8111/v1/config" `
 - Temporarily configure the current day as disabled in `enabled_weekdays`, restart the service, and log in as `John`.
 - Expected:
   - no daily quota is consumed
-  - TTS announces that computer use is unavailable today
-  - countdown and enforcement execute immediately
+  - TTS announces that computer use is unavailable today and includes the configured reenforcement delay
+  - countdown and enforcement execute after `reenforcement_delay_sec` expires
 
 ## 14. Helper Respawn
 

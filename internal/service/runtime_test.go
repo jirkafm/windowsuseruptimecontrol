@@ -199,7 +199,7 @@ func TestTickUsesDailyQuotaOnEnabledScheduledDay(t *testing.T) {
 	}
 }
 
-func TestTickEnforcesImmediatelyOnDisabledScheduledDay(t *testing.T) {
+func TestTickDelaysEnforcementOnDisabledScheduledDay(t *testing.T) {
 	t.Parallel()
 
 	helper := &fakeHelperBus{}
@@ -221,7 +221,8 @@ func TestTickEnforcesImmediatelyOnDisabledScheduledDay(t *testing.T) {
 		Power:    power,
 	}
 
-	if err := rt.Tick(context.Background(), time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC), 60); err != nil {
+	now := time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC)
+	if err := rt.Tick(context.Background(), now, 60); err != nil {
 		t.Fatalf("Tick error: %v", err)
 	}
 
@@ -235,14 +236,31 @@ func TestTickEnforcesImmediatelyOnDisabledScheduledDay(t *testing.T) {
 	if user.LastEnforcementReason != "weekday disabled" {
 		t.Fatalf("LastEnforcementReason = %q, want weekday disabled", user.LastEnforcementReason)
 	}
-	if power.hibernateCalls != 1 {
-		t.Fatalf("hibernateCalls = %d, want 1", power.hibernateCalls)
+	if !user.ReenforcementPending {
+		t.Fatal("ReenforcementPending = false, want true")
 	}
-	if len(helper.messages) != 11 {
-		t.Fatalf("messages = %#v, want disabled-day warning plus countdown", helper.messages)
+	if got := user.ReenforcementDeadline.Sub(now); got != 180*time.Second {
+		t.Fatalf("ReenforcementDeadline delta = %v, want 180s", got)
+	}
+	if power.hibernateCalls != 0 {
+		t.Fatalf("hibernateCalls = %d, want 0 during reenforcement delay", power.hibernateCalls)
+	}
+	if len(helper.messages) != 1 {
+		t.Fatalf("messages = %#v, want disabled-day warning", helper.messages)
 	}
 	if !strings.Contains(helper.messages[0], "not available today") {
 		t.Fatalf("first message = %q, want disabled-day warning", helper.messages[0])
+	}
+
+	rt.lastTick = now.Add(3 * time.Minute)
+	if err := rt.Tick(context.Background(), now.Add(3*time.Minute+time.Second), 1); err != nil {
+		t.Fatalf("second Tick error: %v", err)
+	}
+	if power.hibernateCalls != 1 {
+		t.Fatalf("hibernateCalls = %d, want 1 after reenforcement delay", power.hibernateCalls)
+	}
+	if len(helper.messages) != 11 {
+		t.Fatalf("messages = %#v, want warning plus countdown", helper.messages)
 	}
 }
 
