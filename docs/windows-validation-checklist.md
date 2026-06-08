@@ -109,6 +109,11 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8111/v1/announce" `
   - `John` hears the TTS announcement
   - API log contains the request
 
+- If validating with `language` set to `cs` on a machine without a `cs-CZ` voice:
+  - `John` hears an English fallback notice
+  - later quota announcements are spoken in English
+  - `C:\ProgramData\Activity\logs\helper.log` records the unavailable `cs-CZ` culture fallback
+
 ## 5. API Auth Checks
 
 - Call health without auth:

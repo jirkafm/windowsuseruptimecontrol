@@ -7,6 +7,7 @@ const (
 )
 
 type Command struct {
-	Type    CommandType `json:"type"`
-	Message string      `json:"message"`
+	Type            CommandType `json:"type"`
+	Message         string      `json:"message"`
+	FallbackMessage string      `json:"fallback_message,omitempty"`
 }

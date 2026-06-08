@@ -98,6 +98,7 @@ type ActiveUser struct {
 type Evaluation struct {
 	State              StateFile
 	Messages           []string
+	FallbackMessages   []string
 	Countdown          []string
 	TriggerEnforcement bool
 }

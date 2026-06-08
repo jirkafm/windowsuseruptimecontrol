@@ -24,7 +24,7 @@ type Detector interface {
 }
 
 type HelperBus interface {
-	Speak(ctx context.Context, userSID, message string) error
+	Speak(ctx context.Context, userSID, message string, fallbackMessage ...string) error
 }
 
 type PowerController interface {
@@ -257,6 +257,7 @@ func disabledDayEvaluation(now time.Time, active model.ActiveUser, state model.S
 		user.ReenforcementPending = true
 		user.ReenforcementDeadline = now.Add(time.Duration(reenforcementDelaySec) * time.Second)
 		result.Messages = append(result.Messages, i18n.ScheduledUnavailable(language, reenforcementDelaySec))
+		result.FallbackMessages = append(result.FallbackMessages, i18n.ScheduledUnavailable(i18n.English, reenforcementDelaySec))
 	} else if !user.ReenforcementDeadline.After(now) {
 		result.TriggerEnforcement = true
 		result.Countdown = []string{"10", "9", "8", "7", "6", "5", "4", "3", "2", "1"}
@@ -269,13 +270,13 @@ func disabledDayEvaluation(now time.Time, active model.ActiveUser, state model.S
 
 func (r *Runtime) deliverEvaluation(ctx context.Context, userSID, username string, remainingSec int64, result model.Evaluation) error {
 	var notifyErr error
-	speak := func(message string) {
-		if err := r.Helper.Speak(ctx, userSID, message); err != nil {
+	speak := func(message, fallbackMessage string) {
+		if err := r.Helper.Speak(ctx, userSID, message, fallbackMessage); err != nil {
 			notifyErr = errors.Join(notifyErr, err)
 		}
 	}
 
-	for _, message := range result.Messages {
+	for idx, message := range result.Messages {
 		r.logf(
 			"quota message issued username=%s sid=%s remaining_sec=%d message=%q",
 			username,
@@ -283,11 +284,15 @@ func (r *Runtime) deliverEvaluation(ctx context.Context, userSID, username strin
 			remainingSec,
 			message,
 		)
-		speak(message)
+		fallbackMessage := ""
+		if idx < len(result.FallbackMessages) {
+			fallbackMessage = result.FallbackMessages[idx]
+		}
+		speak(message, fallbackMessage)
 	}
 	if result.TriggerEnforcement {
 		for _, number := range result.Countdown {
-			speak(number)
+			speak(number, number)
 		}
 		r.logf("enforcement hibernate requested username=%s sid=%s", username, userSID)
 		if err := r.Power.Hibernate(ctx); err != nil {
@@ -624,7 +629,12 @@ func (r *Runtime) announceAllowanceChanged(ctx context.Context, userKey string, 
 	if !strings.EqualFold(active.UserSID, user.UserSID) && !strings.EqualFold(active.UserSID, userKey) {
 		return
 	}
-	_ = r.Helper.Speak(ctx, active.UserSID, i18n.AllowanceChanged(r.Config.Language, user.RemainingSec/60))
+	_ = r.Helper.Speak(
+		ctx,
+		active.UserSID,
+		i18n.AllowanceChanged(r.Config.Language, user.RemainingSec/60),
+		i18n.AllowanceChanged(i18n.English, user.RemainingSec/60),
+	)
 }
 
 func resolveUserKey(state model.StateFile, input string) (string, error) {

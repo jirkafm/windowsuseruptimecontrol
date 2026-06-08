@@ -33,15 +33,21 @@ func (f fakeDetector) ActiveUser(context.Context) (model.ActiveUser, bool, error
 }
 
 type fakeHelperBus struct {
-	messages []string
-	err      error
+	messages         []string
+	fallbackMessages []string
+	err              error
 }
 
-func (f *fakeHelperBus) Speak(_ context.Context, userSID, message string) error {
+func (f *fakeHelperBus) Speak(_ context.Context, userSID, message string, fallbackMessage ...string) error {
 	if f.err != nil {
 		return f.err
 	}
 	f.messages = append(f.messages, userSID+":"+message)
+	if len(fallbackMessage) > 0 {
+		f.fallbackMessages = append(f.fallbackMessages, fallbackMessage[0])
+	} else {
+		f.fallbackMessages = append(f.fallbackMessages, "")
+	}
 	return nil
 }
 
@@ -127,6 +133,48 @@ func TestTickConsumesTimeAndSpeaksPolicyMessages(t *testing.T) {
 	}
 	if power.hibernateCalls != 0 {
 		t.Fatalf("hibernateCalls = %d, want 0", power.hibernateCalls)
+	}
+}
+
+func TestTickSendsEnglishFallbackForCzechPolicyMessage(t *testing.T) {
+	t.Parallel()
+
+	helper := &fakeHelperBus{}
+	rt := Runtime{
+		Config: model.Config{
+			Language:                 "cs",
+			DefaultDailyAllowanceSec: 3600,
+			ReenforcementDelaySec:    180,
+		},
+		Store: &fakeStore{
+			state: model.StateFile{
+				ServiceDate: "2026-04-01",
+				Users: map[string]model.UserDayState{
+					"sid-john": {
+						UserSID:           "sid-john",
+						Username:          "John",
+						Date:              "2026-04-01",
+						DailyAllowanceSec: 3600,
+						ConsumedSec:       0,
+						RemainingSec:      3600,
+					},
+				},
+			},
+		},
+		Detector: fakeDetector{user: model.ActiveUser{SessionID: 1, Username: "John", UserSID: "sid-john"}, ok: true},
+		Helper:   helper,
+		Power:    &fakePower{},
+	}
+
+	if err := rt.Tick(context.Background(), time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC), 60); err != nil {
+		t.Fatalf("Tick error: %v", err)
+	}
+
+	if len(helper.messages) != 1 || helper.messages[0] != "sid-john:Zbývá ti 59 minut." {
+		t.Fatalf("messages = %#v, want Czech warning", helper.messages)
+	}
+	if len(helper.fallbackMessages) != 1 || helper.fallbackMessages[0] != "You have 59 minutes remaining." {
+		t.Fatalf("fallbackMessages = %#v, want English warning", helper.fallbackMessages)
 	}
 }
 

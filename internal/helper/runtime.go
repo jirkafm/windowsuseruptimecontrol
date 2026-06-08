@@ -13,7 +13,7 @@ import (
 )
 
 type Speaker interface {
-	Speak(text string) error
+	Speak(text string, fallbackText ...string) error
 }
 
 type Runtime struct {
@@ -31,7 +31,7 @@ func (r Runtime) Run(ctx context.Context, commands <-chan helperipc.Command) err
 				return nil
 			}
 			if cmd.Type == helperipc.CommandSpeak {
-				if err := r.Speaker.Speak(cmd.Message); err != nil {
+				if err := r.Speaker.Speak(cmd.Message, cmd.FallbackMessage); err != nil {
 					return err
 				}
 			}
@@ -79,7 +79,7 @@ func (r Runtime) RunHTTPStream(ctx context.Context, streamURL, token, userSID st
 			return err
 		}
 		if cmd.Type == helperipc.CommandSpeak {
-			if err := r.Speaker.Speak(cmd.Message); err != nil {
+			if err := r.Speaker.Speak(cmd.Message, cmd.FallbackMessage); err != nil {
 				return err
 			}
 		}

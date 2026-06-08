@@ -28,7 +28,7 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 		if !user.ReenforcementPending {
 			user.ReenforcementPending = true
 			user.ReenforcementDeadline = now.Add(time.Duration(e.ReenforcementDelaySec) * time.Second)
-			result.Messages = append(result.Messages, i18n.WeeklyNoTime(e.Language, e.ReenforcementDelaySec))
+			addMessage(&result, i18n.WeeklyNoTime(e.Language, e.ReenforcementDelaySec), i18n.WeeklyNoTime(i18n.English, e.ReenforcementDelaySec))
 		} else if !user.ReenforcementDeadline.After(now) {
 			result.TriggerEnforcement = true
 			result.Countdown = countdown()
@@ -43,15 +43,15 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 	user.RecalculateWeeklyRemaining()
 
 	if !user.StartupWarningSent {
-		result.Messages = append(result.Messages, i18n.WeeklyRemaining(e.Language, user.RemainingSec/60))
+		addMessage(&result, i18n.WeeklyRemaining(e.Language, user.RemainingSec/60), i18n.WeeklyRemaining(i18n.English, user.RemainingSec/60))
 		user.StartupWarningSent = true
 	}
 	if e.WarningHalfwayEnabled && !user.HalfwayWarningSent && user.WeeklyConsumedSec() >= user.WeeklyAllowanceSec/2 {
-		result.Messages = append(result.Messages, i18n.WeeklyHalfway(e.Language))
+		addMessage(&result, i18n.WeeklyHalfway(e.Language), i18n.WeeklyHalfway(i18n.English))
 		user.HalfwayWarningSent = true
 	}
 	if e.WarningFiveMinEnabled && !user.FiveMinWarningSent && user.RemainingSec <= 300 {
-		result.Messages = append(result.Messages, i18n.WeeklyFiveMinutes(e.Language))
+		addMessage(&result, i18n.WeeklyFiveMinutes(e.Language), i18n.WeeklyFiveMinutes(i18n.English))
 		user.FiveMinWarningSent = true
 	}
 
@@ -70,6 +70,11 @@ func (e Engine) Evaluate(now time.Time, active model.ActiveUser, state model.Sta
 	state.WeeklyUsers[active.UserSID] = user
 	result.State = state
 	return result
+}
+
+func addMessage(result *model.Evaluation, message, fallbackMessage string) {
+	result.Messages = append(result.Messages, message)
+	result.FallbackMessages = append(result.FallbackMessages, fallbackMessage)
 }
 
 func NormalizeUser(now time.Time, active model.ActiveUser, user model.WeeklyUserState, defaultWeeklyAllowanceSec int64) model.WeeklyUserState {
